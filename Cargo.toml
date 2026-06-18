@@ -1,0 +1,22 @@
+[package]
+name = "guardian_agent"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+scrap = "0.5" # O la versión exacta que estés usando para capturar
+image = "0.24" # Procesamiento de buffers y JPEG
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
+futures-util = "0.3"
+tokio-tungstenite = "0.20" # Para la señalización con FastAPI
+url = "2.4"
+reqwest = { version = "0.11", features = ["json"] }
+enigo = "0.1" # Control de periféricos
+base64 = "0.21"
+
+# 🚀 EL MOTOR P2P COMERCIAL
+webrtc = "0.6"
+bytes = "1.5"
