@@ -105,9 +105,21 @@ fn ejecutar_comando_periferico(comando: RemoteControlCommand, enigo: &mut Enigo,
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    registrar_log("[GUARDIAN-P2P] Inicializando Agente Nativo Comercial...");
+    registrar_log("[GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...");
 
-    // ── 1. Autenticación ───────────────────────────────────────────────────────
+    // ── 1. Inicialización de xcap Multiplataforma Nativo ────────────────────────
+    registrar_log("[XCAP] Mapeando pantalla principal del sistema...");
+    let monitor = xcap::Monitor::all()
+        .expect("[ERROR] No se pudo acceder a la lista de pantallas")
+        .into_iter()
+        .next()
+        .expect("[ERROR] Ningún monitor activo detectado.");
+
+    let screen_width  = monitor.width().unwrap() as f64;
+    let screen_height = monitor.height().unwrap() as f64;
+    registrar_log(&format!("[XCAP] Monitor inicializado correctamente: {}x{}", screen_width, screen_height));
+
+    // ── 2. Autenticación ───────────────────────────────────────────────────────
     let token = match obtener_token_seguridad().await {
         Ok(t) => { registrar_log("[AUTH] Token obtenido correctamente."); t }
         Err(e) => {
@@ -116,62 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // ── 2. Capturador de pantalla — ANTES del WebSocket para detectar fallos pronto
-    //    Se mueve aquí para que el error de scrap sea visible en el log y no cuelgue
-    //    silenciosamente más adelante tras el handshake SDP.
-    registrar_log("[SCRAP] Inicializando capturador de pantalla...");
-    let display = scrap::Display::primary().expect("[ERROR] Fallo al mapear pantalla primaria");
-    let screen_width  = display.width()  as f64;
-    let screen_height = display.height() as f64;
-    // Capturer se construye en el spawn bloqueante para no congelar el runtime de tokio
-    let (tx_frame, mut rx_frame) = tokio::sync::mpsc::channel::<Vec<u8>>(2);
-    let sw = screen_width  as u32;
-    let sh = screen_height as u32;
-    std::thread::spawn(move || {
-        let mut capturador = match scrap::Capturer::new(display) {
-            Ok(c) => c,
-            Err(e) => { eprintln!("[ERROR-SCRAP] No se pudo crear Capturer: {}", e); return; }
-        };
-        loop {
-            match capturador.frame() {
-                Ok(sct_img) => {
-                    let width  = sw as usize;
-                    let height = sh as usize;
-                    let bpp    = 4;
-                    let stride = sct_img.len() / height;
-                    let mut buffer_rgb = Vec::with_capacity(width * height * 3);
-                    for y in 0..height {
-                        let row_start = y * stride;
-                        let row_data  = &sct_img[row_start..(row_start + width * bpp)];
-                        for x in 0..width {
-                            let p = x * bpp;
-                            buffer_rgb.push(row_data[p + 2]); // R
-                            buffer_rgb.push(row_data[p + 1]); // G
-                            buffer_rgb.push(row_data[p + 0]); // B
-                        }
-                    }
-                    // Escalar y comprimir en JPEG en el hilo bloqueante
-                    if let Some(img_buf) = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(sw, sh, buffer_rgb) {
-                        let escalada = image::DynamicImage::ImageRgb8(img_buf)
-                            .resize(800, 450, image::imageops::FilterType::Triangle);
-                        let mut jpeg_bytes = Vec::new();
-                        let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_bytes, 40);
-                        if enc.encode_image(&escalada).is_ok() && jpeg_bytes.len() < 65_535 {
-                            let _ = tx_frame.blocking_send(jpeg_bytes);
-                        }
-                    }
-                    std::thread::sleep(Duration::from_millis(60));
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
-                Err(_) => break,
-            }
-        }
-    });
-    registrar_log("[SCRAP] Hilo de captura lanzado.");
-
-    // ── 3. WebRTC ─────────────────────────────────────────────────────────────
+    // ── 3. WebRTC Configuración inicial ───────────────────────────────────────
     let m_engine = MediaEngine::default();
     let api = APIBuilder::new().with_media_engine(m_engine).build();
     let config = RTCConfiguration {
@@ -195,40 +152,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| { registrar_log(&format!("[ERROR] Fallo WebSocket: {}", e)); e })?;
     registrar_log("[WS] Conectado al servidor de señalización.");
 
-    let (ws_sender, mut ws_receiver) = ws_stream.split();
-    let ws_sender_mutex = Arc::new(Mutex::new(ws_sender));
+    let (ws_stream_sender, mut ws_receiver) = ws_stream.split();
+    let ws_sender_mutex = Arc::new(Mutex::new(ws_stream_sender));
 
-    // ── 5. Canal de comandos de periférico ────────────────────────────────────
+    // ── 5. Canales MPSC de comunicación asíncrona ─────────────────────────────
     let (tx_comando, mut rx_comando) = tokio::sync::mpsc::channel::<RemoteControlCommand>(100);
-
-    // ── 6. DataChannel holder — se extrae el Arc antes de entrar al loop ──────
-    //    FIX Bug 3: usamos un canal para pasar el DataChannel en lugar de un
-    //    Mutex que se mantiene bloqueado durante el await de dc.send().
     let (tx_dc, mut rx_dc) = tokio::sync::mpsc::channel::<Arc<RTCDataChannel>>(1);
-    let tx_comando_dc = tx_comando.clone();
+    // Canal táctico para recibir los frames JPEG desde el hilo de captura
+    let (tx_video, mut rx_video) = tokio::sync::mpsc::channel::<Vec<u8>>(2);
 
+    // Escuchar la inicialización del canal multimedia externo
     peer_connection.on_data_channel(Box::new(move |d| {
-        let tx_cmd = tx_comando_dc.clone();
-        let tx_dc  = tx_dc.clone();
+        let tx_dc = tx_dc.clone();
         Box::pin(async move {
             if d.label() == "video_stream" {
-                registrar_log("[DC] DataChannel 'video_stream' recibido.");
-                d.on_message(Box::new(move |msg| {
-                    let tx = tx_cmd.clone();
-                    Box::pin(async move {
-                        if let Ok(text) = std::str::from_utf8(&msg.data) {
-                            if let Ok(cmd) = serde_json::from_str::<RemoteControlCommand>(text) {
-                                let _ = tx.send(cmd).await;
-                            }
-                        }
-                    })
-                }));
+                registrar_log("[DC] DataChannel 'video_stream' detectado por WebRTC.");
                 let _ = tx_dc.send(d).await;
             }
         })
     }));
 
-    // ── 7. Señalización WebSocket en spawn separado ───────────────────────────
+    // ── 6. Manejo asíncrono de Señalización en Tokio Task ─────────────────────
     let pc_clone        = Arc::clone(&peer_connection);
     let ws_sender_clone = Arc::clone(&ws_sender_mutex);
 
@@ -278,7 +222,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // ── 8. ICE candidates salientes ───────────────────────────────────────────
+    // ── 7. ICE candidates salientes ───────────────────────────────────────────
     let ws_sender_ice = Arc::clone(&ws_sender_mutex);
     peer_connection.on_ice_candidate(Box::new(move |c| {
         let ws_sender_ice = Arc::clone(&ws_sender_ice);
@@ -293,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     }));
 
-    // ── 9. Esperar conexión P2P — con timeout para no colgar eternamente ──────
+    // ── 8. Esperar conexión P2P (Estado de red) ───────────────────────────────
     let (tx_active, mut rx_active) = tokio::sync::mpsc::channel::<bool>(1);
     peer_connection.on_peer_connection_state_change(Box::new(move |s| {
         registrar_log(&format!("[WEBRTC] Estado de conexión: {:?}", s));
@@ -309,32 +253,107 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::select! {
         _ = rx_active.recv() => { registrar_log("[GUARDIAN] ¡Conexión P2P establecida!"); }
         _ = tokio::time::sleep(Duration::from_secs(120)) => {
-            registrar_log("[TIMEOUT] Sin conexión P2P en 120s. Comprueba que el visor está activo.");
+            registrar_log("[TIMEOUT] Sin conexión P2P en 120s.");
             return Ok(());
         }
     }
 
-    // ── 10. Esperar DataChannel y entrar en el loop principal ─────────────────
+    // ── 9. Acoplar el DataChannel activo ──────────────────────────────────────
     let mut enigo = Enigo::new();
     let dc = match tokio::time::timeout(Duration::from_secs(10), rx_dc.recv()).await {
-        Ok(Some(d)) => { registrar_log("[DC] DataChannel listo. Iniciando captura."); d }
+        Ok(Some(d)) => { registrar_log("[DC] DataChannel recibido en el hilo principal."); d }
         _ => { registrar_log("[ERROR] No se recibió el DataChannel a tiempo."); return Ok(()); }
     };
 
+    let tx_comando_loop = tx_comando.clone();
+    dc.on_message(Box::new(move |msg| {
+        let tx = tx_comando_loop.clone();
+        Box::pin(async move {
+            if let Ok(text) = std::str::from_utf8(&msg.data) {
+                if let Ok(cmd) = serde_json::from_str::<RemoteControlCommand>(text) {
+                    let _ = tx.try_send(cmd);
+                }
+            }
+        })
+    }));
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    if dc.ready_state() == RTCDataChannelState::Open {
+        let _ = dc.send(&Bytes::from_static(b"PING")).await;
+        registrar_log("[DC] Enviado PING de diagnóstico inicial al visor.");
+    }
+
+    // ── 10. GENERAR TRABAJO INDEPENDIENTE PARA CAPTURA DE PANTALLA (Multi-threading) ──
+    registrar_log("[ENGINE] Lanzando orquestador gráfico en hilo paralelo...");
+    tokio::task::spawn_blocking(move || {
+        loop {
+            // Captura directa en formato plano multiplataforma
+            if let Ok(imagen_xcap) = monitor.capture_image() {
+                let ancho_real = imagen_xcap.width();
+                let alto_real = imagen_xcap.height();
+                
+                // Convertimos la imagen plana de xcap en un contenedor manejable por image crate
+                let raw_pixels = imagen_xcap.into_raw();
+                
+                if let Some(img_buf) = image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(
+                    ancho_real, 
+                    alto_real, 
+                    raw_pixels
+                ) {
+                    // Reescalado inteligente de alta velocidad libre de lag por hardware
+                    let escalada = image::DynamicImage::ImageRgba8(img_buf)
+                        .thumbnail(640, 360);
+                    
+                    let mut jpeg_bytes = Vec::new();
+                    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg_bytes, 40); 
+                    
+                    if enc.encode_image(&escalada).is_ok() {
+                        // Enviamos los bytes listos al bucle WebRTC sin saturar la memoria (drop reactivo)
+                        let _ = tx_video.try_send(jpeg_bytes);
+                    }
+                }
+            }
+            // Mantenemos un muestreo uniforme estable para aliviar la CPU (~30 FPS continuos)
+            std::thread::sleep(Duration::from_millis(33));
+        }
+    });
+
+    // ── 11. BUCLE ASÍNCRONO DE ALTA FLUIDEZ (MAIN THREAD LIBERADO) ────────────────────
+    let mut contador_frames = 0;
+
     loop {
-        // Procesar comandos de periférico recibidos
+        // A. Despachar comandos de periféricos entrantes instantáneamente
         while let Ok(comando) = rx_comando.try_recv() {
+            registrar_log(&format!("[RATON-1:1] Ejecutando evento: {}", comando.event));
             ejecutar_comando_periferico(comando, &mut enigo, screen_width, screen_height);
         }
 
-        // Enviar frame si el canal está abierto y sin backpressure
-        if dc.ready_state() == RTCDataChannelState::Open && dc.buffered_amount().await == 0 {
-            if let Ok(jpeg_bytes) = rx_frame.try_recv() {
-                let data_binaria = Bytes::from(jpeg_bytes);
-                let _ = dc.send(&data_binaria).await;
+        // B. Transmisión asíncrona de vídeo no bloqueante
+        if dc.ready_state() == RTCDataChannelState::Open {
+            // Si el hilo paralelo tiene un frame listo, lo inyectamos de inmediato a WebRTC
+            if let Ok(jpeg_bytes) = rx_video.try_recv() {
+                let len_bytes = jpeg_bytes.len();
+                if len_bytes < 65535 {
+                    let data_binaria = Bytes::from(jpeg_bytes);
+                    if dc.send(&data_binaria).await.is_ok() {
+                        contador_frames += 1;
+                        if contador_frames % 30 == 0 {
+                            registrar_log(&format!("[TELEMETRIA] Canal libre: {} frames enviados en paralelo. Tamaño: {} bytes", contador_frames, len_bytes));
+                        }
+                    }
+                }
+            }
+        } else {
+            if dc.ready_state() == RTCDataChannelState::Closed || dc.ready_state() == RTCDataChannelState::Closing {
+                registrar_log("[WEBRTC] El DataChannel se ha cerrado de forma externa. Saliendo.");
+                break;
             }
         }
 
-        tokio::time::sleep(Duration::from_millis(16)).await;
+        // Latencia mínima del bucle central: El ratón responderá de forma asíncrona a 1ms
+        tokio::time::sleep(Duration::from_millis(1)).await;
     }
+
+    Ok(())
 }

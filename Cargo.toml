@@ -20,3 +20,4 @@ base64 = "0.21"
 # 🚀 EL MOTOR P2P COMERCIAL
 webrtc = "0.6"
 bytes = "1.5"
+xcap = "0.7.0"
