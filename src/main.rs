@@ -10,6 +10,9 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264};
 use webrtc::api::APIBuilder;
 
+// enigo para control de gestos y mouse
+use enigo::{Direction, Enigo, Key, Keyboard, Mouse, Settings};
+
 // Configuración y estados de Peer Connection
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
@@ -25,7 +28,29 @@ use webrtc::rtp_transceiver::{
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 
-// 🔥 FIJADO PARA WEBRTC v0.13: La ruta exacta de inicialización ICE en tu versión
+#[derive(Serialize, Deserialize, Clone)]
+struct CommandPayload {
+    event: String,
+    // Ratón y Clics
+    #[serde(default)]
+    x_píxel: f64,
+    #[serde(default)]
+    y_píxel: f64,
+    #[serde(default)]
+    w_nativa: f64,
+    #[serde(default)]
+    h_nativa: f64,
+    #[serde(default)]
+    button: String,
+    // Teclado
+    #[serde(default)]
+    key: String,
+    // Scroll
+    #[serde(default)]
+    delta_x: i32,
+    #[serde(default)]
+    delta_y: i32,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 struct SdpPayload {
@@ -139,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::pin(async {})
     }));
 
-    println!("[AGENTE] Conectado. Esperando estabilización ICE...");
+    println!("[AGENTE] Conectado. Esperando estabilización ICE... ");
     sleep(Duration::from_millis(1500)).await;
 
     let offer = pc.create_offer(None).await?;
@@ -180,21 +205,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "-pixel_format", "nv12",
                 "-i", "1",
                 "-r", "30",
-                
-                // 🔥 SUBIMOS RESOLUCIÓN A 720p: Textos ultra nítidos
                 "-vf", "scale=1280:-1",      
-                
-                // Codificador por hardware de Apple
                 "-vcodec", "h264_videotoolbox", 
-                
                 "-realtime", "1",
-                "-bf", "0",                  // Latencia cero
+                "-bf", "0",                  
                 "-prio_speed", "1",
-                
-                // 🔥 Ajuste de calidad para alta resolución sin saturar
-                "-q:v", "55",                // Calidad óptima balanceada para texto
-                "-g", "30",                  // Un keyframe por segundo
-                
+                "-q:v", "55",                
+                "-g", "30",                  
                 "-f", "rtp",
                 "-payload_type", "96", 
                 "rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760"
@@ -230,6 +247,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = child.kill().await;
     });
 
+    // Inicialización del motor Enigo para macOS
+    let mut enigo = Enigo::new(&Settings::default()).unwrap();
+    
+    // Dimensiones lógicas reales de tu monitor (Cámbialas según tu pantalla si es necesario)
+    let pantalla_ancho_real = 1440.0;
+    let pantalla_alto_real = 900.0;
+
     // Escucha de mensajes del WebSocket
     let pc_clone = Arc::clone(&pc);
     while let Some(Ok(msg)) = ws_rx.next().await {
@@ -252,10 +276,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
-                // 2. Procesar Candidatos ICE remotos con la ruta real de v0.13
+                // 2. Procesar Candidatos ICE remotos
                 else if let Some(ice_data) = payload.ice {
-                    // Convertimos el Value directamente al tipo requerido por el SDK
-                    // usando la ruta completa para evitar fallos de alcance.
                     if let Ok(ice_init) = serde_json::from_value::<webrtc::ice_transport::ice_candidate::RTCIceCandidateInit>(ice_data) {
                         if let Err(e) = pc_clone.add_ice_candidate(ice_init).await {
                             eprintln!("[AGENTE-ICE-WARN] Error agregando candidato ICE del visor: {}", e);
@@ -265,11 +287,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             } 
-            else if text_str.contains("mouse_move") || text_str.contains("mouse_down") || text_str.contains("mouse_up") {
-                println!("[COMMAND-WS] Comando de control recibido: {}", text_str);
+            // 🔥 CONTROL INTERACTIVO: Decodificar y ejecutar acciones físicas de perifericos
+            else if let Ok(cmd) = serde_json::from_str::<CommandPayload>(text_str) {
+                match cmd.event.as_str() {
+                    "mouse_move" => {
+                        if cmd.w_nativa > 0.0 && cmd.h_nativa > 0.0 {
+                            let real_x = (cmd.x_píxel / cmd.w_nativa) * pantalla_ancho_real;
+                            let real_y = (cmd.y_píxel / cmd.h_nativa) * pantalla_alto_real;
+                            let _ = enigo.move_mouse(real_x as i32, real_y as i32, enigo::Coordinate::Abs);
+                        }
+                    }
+                    "mouse_down" => {
+                        let boton = if cmd.button == "right" { enigo::Button::Right } else { enigo::Button::Left };
+                        let _ = enigo.button(boton, Direction::Press);
+                    }
+                    "mouse_up" => {
+                        let boton = if cmd.button == "right" { enigo::Button::Right } else { enigo::Button::Left };
+                        let _ = enigo.button(boton, Direction::Release);
+                    }
+                    "scroll" => {
+                        if cmd.delta_y != 0 {
+                            let _ = enigo.scroll(cmd.delta_y, enigo::Axis::Vertical);
+                        }
+                        if cmd.delta_x != 0 {
+                            let _ = enigo.scroll(cmd.delta_x, enigo::Axis::Horizontal);
+                        }
+                    }
+                    "key_down" => {
+                        if let Some(k) = mapear_tecla(&cmd.key) {
+                            let _ = enigo.key(k, Direction::Press);
+                        }
+                    }
+                    "key_up" => {
+                        if let Some(k) = mapear_tecla(&cmd.key) {
+                            let _ = enigo.key(k, Direction::Release);
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
     }
 
     Ok(())
+}
+
+// Mapeador auxiliar de cadenas de texto Web (JavaScript) a estructuras nativas de Enigo
+fn mapear_tecla(key_str: &str) -> Option<Key> {
+    match key_str {
+        "Enter" => Some(Key::Return),
+        "Backspace" => Some(Key::Backspace),
+        "Tab" => Some(Key::Tab),
+        "Escape" => Some(Key::Escape),
+        "Space" | " " => Some(Key::Space),
+        "ArrowUp" => Some(Key::UpArrow),
+        "ArrowDown" => Some(Key::DownArrow),
+        "ArrowLeft" => Some(Key::LeftArrow),
+        "ArrowRight" => Some(Key::RightArrow),
+        "Meta" | "Command" => Some(Key::Meta),
+        "Shift" => Some(Key::Shift),
+        "Control" => Some(Key::Control),
+        "Alt" => Some(Key::Alt),
+        s if s.len() == 1 => {
+            if let Some(c) = s.chars().next() {
+                Some(Key::Unicode(c))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
 }
