@@ -3680,3 +3680,875 @@
 [2026-06-18 18:39:46] [TELEMETRIA] Canal libre: 120 frames enviados en paralelo. Tamaño: 26539 bytes
 [2026-06-18 18:39:58] [TELEMETRIA] Canal libre: 150 frames enviados en paralelo. Tamaño: 26568 bytes
 [2026-06-18 18:40:09] [TELEMETRIA] Canal libre: 180 frames enviados en paralelo. Tamaño: 26728 bytes
+[2026-06-18 18:42:46] [GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...
+[2026-06-18 18:42:46] [XCAP] Mapeando pantalla principal del sistema...
+[2026-06-18 18:42:46] [XCAP] Monitor inicializado correctamente: 1920x1080
+[2026-06-18 18:42:46] [AUTH] Token obtenido correctamente.
+[2026-06-18 18:42:46] [WEBRTC] PeerConnection creada.
+[2026-06-18 18:42:46] [WS] Conectando a señalización: ws://192.168.1.135:8080/api/remote/signaling/test-session-123/agente?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJndWFyZGlhbl9hdXRob3JpemVkX3VzZXIiLCJleHAiOjE3ODE4MDQ1NjZ9.ZzgfYQWyaTUNr-QHJFtx5lgoX61N68s54t5i_Gm1TT0
+[2026-06-18 18:42:46] [WS] Conectado al servidor de señalización.
+[2026-06-18 18:42:46] [GUARDIAN] Esperando conexión P2P del visor (timeout 120s)...
+[2026-06-18 18:42:56] [SDP] Offer recibida del visor.
+[2026-06-18 18:42:56] [SDP] Answer enviada al visor.
+[2026-06-18 18:42:56] [WEBRTC] Estado de conexión: Connected
+[2026-06-18 18:42:56] [GUARDIAN] ¡Conexión P2P establecida!
+[2026-06-18 18:42:56] [DC] DataChannel 'video_stream' detectado por WebRTC.
+[2026-06-18 18:42:56] [DC] DataChannel recibido en el hilo principal.
+[2026-06-18 18:42:56] [DC] Enviado PING de diagnóstico inicial al visor.
+[2026-06-18 18:42:56] [ENGINE] Lanzando orquestador gráfico en hilo paralelo...
+[2026-06-18 18:44:08] [GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...
+[2026-06-18 18:44:08] [XCAP] Mapeando pantalla principal del sistema...
+[2026-06-18 18:44:08] [XCAP] Monitor inicializado correctamente: 1920x1080
+[2026-06-18 18:44:08] [AUTH] Token obtenido correctamente.
+[2026-06-18 18:44:08] [WEBRTC] PeerConnection creada.
+[2026-06-18 18:44:08] [WS] Conectando a señalización: ws://192.168.1.135:8080/api/remote/signaling/test-session-123/agente?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJndWFyZGlhbl9hdXRob3JpemVkX3VzZXIiLCJleHAiOjE3ODE4MDQ2NDh9.GqqIwXEV2m8JAs4Zuj_nL4G9eEnofUXHQC5yeXb-oh8
+[2026-06-18 18:44:08] [WS] Conectado al servidor de señalización.
+[2026-06-18 18:44:08] [GUARDIAN] Esperando conexión P2P del visor (timeout 120s)...
+[2026-06-18 18:44:11] [SDP] Offer recibida del visor.
+[2026-06-18 18:44:11] [SDP] Answer enviada al visor.
+[2026-06-18 18:44:11] [WEBRTC] Estado de conexión: Connected
+[2026-06-18 18:44:11] [GUARDIAN] ¡Conexión P2P establecida!
+[2026-06-18 18:44:11] [DC] DataChannel 'video_stream' detectado por WebRTC.
+[2026-06-18 18:44:11] [DC] DataChannel recibido en el hilo principal.
+[2026-06-18 18:44:11] [DC] Enviado PING de diagnóstico inicial al visor.
+[2026-06-18 18:44:11] [ENGINE] Lanzando orquestador gráfico en hilo paralelo...
+[2026-06-18 18:44:12] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:13] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:14] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:44:23] [TELEMETRIA] Canal libre: 30 frames enviados en paralelo. Tamaño: 24854 bytes
+[2026-06-18 18:44:35] [TELEMETRIA] Canal libre: 60 frames enviados en paralelo. Tamaño: 24992 bytes
+[2026-06-18 18:44:47] [TELEMETRIA] Canal libre: 90 frames enviados en paralelo. Tamaño: 26932 bytes
+[2026-06-18 18:44:59] [TELEMETRIA] Canal libre: 120 frames enviados en paralelo. Tamaño: 27405 bytes
+[2026-06-18 18:45:11] [TELEMETRIA] Canal libre: 150 frames enviados en paralelo. Tamaño: 27732 bytes
+[2026-06-18 18:45:28] [GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...
+[2026-06-18 18:45:28] [XCAP] Mapeando pantalla principal del sistema...
+[2026-06-18 18:45:28] [XCAP] Monitor inicializado correctamente: 1920x1080
+[2026-06-18 18:45:28] [AUTH] Token obtenido correctamente.
+[2026-06-18 18:45:28] [WEBRTC] PeerConnection creada.
+[2026-06-18 18:45:28] [WS] Conectando a señalización: ws://192.168.1.135:8080/api/remote/signaling/test-session-123/agente?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJndWFyZGlhbl9hdXRob3JpemVkX3VzZXIiLCJleHAiOjE3ODE4MDQ3Mjh9.PsdANICo-pDdwaA5cuXhat4P2E6UDbAW5Tq04EGLf4A
+[2026-06-18 18:45:28] [WS] Conectado al servidor de señalización.
+[2026-06-18 18:45:28] [GUARDIAN] Esperando conexión P2P del visor (timeout 120s)...
+[2026-06-18 18:45:35] [SDP] Offer recibida del visor.
+[2026-06-18 18:45:35] [SDP] Answer enviada al visor.
+[2026-06-18 18:45:35] [WEBRTC] Estado de conexión: Connected
+[2026-06-18 18:45:35] [GUARDIAN] ¡Conexión P2P establecida!
+[2026-06-18 18:45:35] [DC] DataChannel 'video_stream' detectado por WebRTC.
+[2026-06-18 18:45:35] [DC] DataChannel recibido en el hilo principal.
+[2026-06-18 18:45:35] [DC] Enviado PING de diagnóstico inicial al visor.
+[2026-06-18 18:47:32] [GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...
+[2026-06-18 18:47:32] [XCAP] Mapeando pantalla principal del sistema...
+[2026-06-18 18:47:32] [XCAP] Monitor inicializado correctamente: 1920x1080
+[2026-06-18 18:47:32] [AUTH] Token obtenido correctamente.
+[2026-06-18 18:47:32] [WEBRTC] PeerConnection creada.
+[2026-06-18 18:47:32] [WS] Conectando a señalización: ws://192.168.1.135:8080/api/remote/signaling/test-session-123/agente?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJndWFyZGlhbl9hdXRob3JpemVkX3VzZXIiLCJleHAiOjE3ODE4MDQ4NTJ9.nwNkFVHxRR0TJKmCMgiLHxgXW1V9nb1d14r_gmC6MsE
+[2026-06-18 18:47:32] [WS] Conectado al servidor de señalización.
+[2026-06-18 18:47:32] [GUARDIAN] Esperando conexión P2P del visor (timeout 120s)...
+[2026-06-18 18:47:39] [SDP] Offer recibida del visor.
+[2026-06-18 18:47:39] [SDP] Answer enviada al visor.
+[2026-06-18 18:47:39] [WEBRTC] Estado de conexión: Connected
+[2026-06-18 18:47:39] [GUARDIAN] ¡Conexión P2P establecida!
+[2026-06-18 18:47:39] [DC] DataChannel 'video_stream' detectado por WebRTC.
+[2026-06-18 18:47:39] [DC] DataChannel recibido en el hilo principal.
+[2026-06-18 18:47:39] [DC] Enviado PING de diagnóstico inicial al visor.
+[2026-06-18 18:47:39] [ENGINE] Lanzando orquestador gráfico en hilo paralelo...
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:42] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:43] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:44] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:45] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:45] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:45] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:45] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:45] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:45] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:46] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:47] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:48] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:47:53] [TELEMETRIA] Canal libre: 30 frames enviados en paralelo. Tamaño: 29847 bytes
+[2026-06-18 18:48:07] [TELEMETRIA] Canal libre: 60 frames enviados en paralelo. Tamaño: 30686 bytes
+[2026-06-18 18:48:22] [GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...
+[2026-06-18 18:48:22] [XCAP] Mapeando pantalla principal del sistema...
+[2026-06-18 18:48:22] [XCAP] Monitor inicializado correctamente: 1920x1080
+[2026-06-18 18:48:22] [AUTH] Token obtenido correctamente.
+[2026-06-18 18:48:22] [WEBRTC] PeerConnection creada.
+[2026-06-18 18:48:22] [WS] Conectando a señalización: ws://192.168.1.135:8080/api/remote/signaling/test-session-123/agente?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJndWFyZGlhbl9hdXRob3JpemVkX3VzZXIiLCJleHAiOjE3ODE4MDQ5MDJ9.ONoSLYTkYSuBGjAhmDgbqG_knCpZ7HXY_ZZkkmyt1iw
+[2026-06-18 18:48:22] [WS] Conectado al servidor de señalización.
+[2026-06-18 18:48:22] [GUARDIAN] Esperando conexión P2P del visor (timeout 120s)...
+[2026-06-18 18:48:29] [SDP] Offer recibida del visor.
+[2026-06-18 18:48:29] [SDP] Answer enviada al visor.
+[2026-06-18 18:48:36] [SDP] Offer recibida del visor.
+[2026-06-18 18:48:36] [SDP] Answer enviada al visor.
+[2026-06-18 18:48:36] [WEBRTC] Estado de conexión: Failed
+[2026-06-18 18:48:51] [SDP] Offer recibida del visor.
+[2026-06-18 18:48:51] [SDP] Answer enviada al visor.
+[2026-06-18 18:48:52] [SDP] Offer recibida del visor.
+[2026-06-18 18:48:52] [SDP] Answer enviada al visor.
+[2026-06-18 18:49:06] [GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...
+[2026-06-18 18:49:06] [XCAP] Mapeando pantalla principal del sistema...
+[2026-06-18 18:49:06] [XCAP] Monitor inicializado correctamente: 1920x1080
+[2026-06-18 18:49:06] [AUTH] Token obtenido correctamente.
+[2026-06-18 18:49:06] [WEBRTC] PeerConnection creada.
+[2026-06-18 18:49:06] [WS] Conectando a señalización: ws://192.168.1.135:8080/api/remote/signaling/test-session-123/agente?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJndWFyZGlhbl9hdXRob3JpemVkX3VzZXIiLCJleHAiOjE3ODE4MDQ5NDZ9.od3udKHTYJgOUWH0MY25BjwxJzo6CbgY6EG8tsdfHgc
+[2026-06-18 18:49:06] [WS] Conectado al servidor de señalización.
+[2026-06-18 18:49:06] [GUARDIAN] Esperando conexión P2P del visor (timeout 120s)...
+[2026-06-18 18:49:11] [SDP] Offer recibida del visor.
+[2026-06-18 18:49:11] [SDP] Answer enviada al visor.
+[2026-06-18 18:49:11] [WEBRTC] Estado de conexión: Connected
+[2026-06-18 18:49:11] [GUARDIAN] ¡Conexión P2P establecida!
+[2026-06-18 18:49:11] [DC] DataChannel 'video_stream' detectado por WebRTC.
+[2026-06-18 18:49:11] [DC] DataChannel recibido en el hilo principal.
+[2026-06-18 18:49:11] [DC] Enviado PING de diagnóstico inicial al visor.
+[2026-06-18 18:49:11] [ENGINE] Lanzando orquestador gráfico en hilo paralelo...
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:15] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:16] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:17] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:18] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:19] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:20] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:23] [TELEMETRIA] Canal libre: 30 frames enviados en paralelo. Tamaño: 26718 bytes
+[2026-06-18 18:49:35] [TELEMETRIA] Canal libre: 60 frames enviados en paralelo. Tamaño: 26836 bytes
+[2026-06-18 18:49:47] [TELEMETRIA] Canal libre: 90 frames enviados en paralelo. Tamaño: 26980 bytes
+[2026-06-18 18:49:49] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:49] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:49] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:49:50] [WEBRTC] El DataChannel se ha cerrado de forma externa. Saliendo.
+[2026-06-18 18:49:59] [GUARDIAN-P2P] Inicializando Agente Multiplataforma Optimizada...
+[2026-06-18 18:49:59] [XCAP] Mapeando pantalla principal del sistema...
+[2026-06-18 18:49:59] [XCAP] Monitor inicializado correctamente: 1920x1080
+[2026-06-18 18:49:59] [AUTH] Token obtenido correctamente.
+[2026-06-18 18:49:59] [WEBRTC] PeerConnection creada.
+[2026-06-18 18:49:59] [WS] Conectando a señalización: ws://192.168.1.135:8080/api/remote/signaling/test-session-123/agente?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJndWFyZGlhbl9hdXRob3JpemVkX3VzZXIiLCJleHAiOjE3ODE4MDQ5OTl9.4T-gM-5BW2HPKuHywh4Dm1GwD7i55Iec_WJyx9wnUjs
+[2026-06-18 18:49:59] [WS] Conectado al servidor de señalización.
+[2026-06-18 18:49:59] [GUARDIAN] Esperando conexión P2P del visor (timeout 120s)...
+[2026-06-18 18:50:54] [SDP] Offer recibida del visor.
+[2026-06-18 18:50:55] [SDP] Answer enviada al visor.
+[2026-06-18 18:50:55] [WEBRTC] Estado de conexión: Connected
+[2026-06-18 18:50:55] [GUARDIAN] ¡Conexión P2P establecida!
+[2026-06-18 18:50:55] [DC] DataChannel 'video_stream' detectado por WebRTC.
+[2026-06-18 18:50:55] [DC] DataChannel recibido en el hilo principal.
+[2026-06-18 18:50:55] [DC] Enviado PING de diagnóstico inicial al visor.
+[2026-06-18 18:50:55] [ENGINE] Lanzando orquestador gráfico en hilo paralelo...
+[2026-06-18 18:50:56] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:50:56] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:50:56] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:50:56] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:51:02] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:51:07] [TELEMETRIA] Canal libre: 30 frames enviados en paralelo. Tamaño: 24707 bytes
+[2026-06-18 18:51:11] [RATON-1:1] Ejecutando evento: mouse_move
+[2026-06-18 18:51:19] [TELEMETRIA] Canal libre: 60 frames enviados en paralelo. Tamaño: 24694 bytes
+[2026-06-18 18:51:19] [WEBRTC] El DataChannel se ha cerrado de forma externa. Saliendo.
+[2026-06-18 19:02:40] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 19:02:40] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 19:02:40] [GUARDIAN] Esperando visor...
+[2026-06-18 19:08:52] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 19:08:52] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 19:08:52] [GUARDIAN] Esperando visor...
+[2026-06-18 19:18:07] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 19:18:07] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 19:18:07] [GUARDIAN] Esperando visor...
+[2026-06-18 19:18:13] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:35:10] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:35:10] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:35:10] [GUARDIAN] Esperando visor...
+[2026-06-18 23:35:13] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:38:36] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:38:36] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:38:36] [GUARDIAN] Esperando visor...
+[2026-06-18 23:38:39] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:40:46] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:40:46] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:40:46] [GUARDIAN] Esperando visor...
+[2026-06-18 23:40:50] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:41:53] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:41:53] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:41:54] [GUARDIAN] Esperando visor...
+[2026-06-18 23:41:57] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:42:40] [P2P-MOSAICO] Paquetes enviados: 40. Tamaño actual: 61315 bytes
+[2026-06-18 23:44:28] [P2P-MOSAICO] Paquetes enviados: 80. Tamaño actual: 2067 bytes
+[2026-06-18 23:44:54] [P2P-MOSAICO] Paquetes enviados: 120. Tamaño actual: 40920 bytes
+[2026-06-18 23:45:05] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:45:05] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:47:09] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:47:09] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:47:09] [GUARDIAN] Esperando visor...
+[2026-06-18 23:47:12] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:52:42] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:52:42] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:52:42] [GUARDIAN] Esperando visor...
+[2026-06-18 23:52:46] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:53:31] [P2P-MOSAICO] Paquetes enviados: 40. Tamaño actual: 2025 bytes
+[2026-06-18 23:54:01] [P2P-MOSAICO] Paquetes enviados: 80. Tamaño actual: 686 bytes
+[2026-06-18 23:54:11] [GUARDIAN-P2P] Inicializando Agente por Mosaicos Diferenciales (4G Opt)...
+[2026-06-18 23:54:11] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:54:11] [GUARDIAN] Esperando visor...
+[2026-06-18 23:54:16] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:55:09] [P2P-MOSAICO] Paquetes enviados: 40. Tamaño actual: 5207 bytes
+[2026-06-18 23:55:47] [P2P-MOSAICO] Paquetes enviados: 80. Tamaño actual: 704 bytes
+[2026-06-18 23:56:25] [P2P-MOSAICO] Paquetes enviados: 120. Tamaño actual: 1302 bytes
+[2026-06-18 23:56:53] [P2P-MOSAICO] Paquetes enviados: 160. Tamaño actual: 687 bytes
+[2026-06-18 23:59:00] [GUARDIAN-P2P] Inicializando Agente Multiplataforma por Mosaicos Concurrentes...
+[2026-06-18 23:59:00] [XCAP] Monitor detectado: 1920x1080
+[2026-06-18 23:59:00] [GUARDIAN] Esperando visor...
+[2026-06-18 23:59:05] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-18 23:59:05] [GUARDIAN] Activando orquestador de flujo unificado...
+[2026-06-18 23:59:21] [P2P-OK] Enviado frame 30. Tamaño: 4932 bytes
+[2026-06-18 23:59:42] [P2P-OK] Enviado frame 60. Tamaño: 1298 bytes
+[2026-06-18 23:59:57] [P2P-OK] Enviado frame 90. Tamaño: 41769 bytes
+[2026-06-19 00:01:35] [GUARDIAN-P2P] Inicializando Agente Multiplataforma por Mosaicos Concurrentes...
+[2026-06-19 00:01:35] [XCAP] Monitor detectado: 1920x1080
+[2026-06-19 00:01:35] [GUARDIAN] Esperando visor...
+[2026-06-19 00:01:37] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-19 00:01:37] [GUARDIAN] Activando orquestador de flujo unificado...
+[2026-06-19 00:01:54] [P2P-OK] Enviado frame 30. Tamaño: 9295 bytes
+[2026-06-19 00:02:10] [P2P-OK] Enviado frame 60. Tamaño: 2010 bytes
+[2026-06-19 00:02:23] [P2P] DataChannel cerrado por el cliente remoto.
+[2026-06-19 00:03:44] [GUARDIAN-P2P] Inicializando Agente Multiplataforma por Mosaicos Concurrentes...
+[2026-06-19 00:03:44] [XCAP] Monitor detectado: 1920x1080
+[2026-06-19 00:03:44] [GUARDIAN] Esperando visor...
+[2026-06-19 00:03:48] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-19 00:03:48] [GUARDIAN] Activando orquestador de flujo unificado...
+[2026-06-19 00:04:10] [P2P] DataChannel cerrado por el cliente remoto.
+[2026-06-19 00:06:15] [GUARDIAN-P2P] Inicializando Agente Multiplataforma por Mosaicos Concurrentes...
+[2026-06-19 00:06:15] [XCAP] Monitor detectado: 1920x1080
+[2026-06-19 00:06:15] [GUARDIAN] Esperando visor...
+[2026-06-19 00:06:19] [GUARDIAN] ¡Visor P2P Conectado!
+[2026-06-19 00:06:19] [GUARDIAN] Activando orquestador de flujo unificado...
+[2026-06-19 00:08:01] [P2P-OK] Enviado frame 30. Tamaño: 2113 bytes
+[2026-06-19 00:10:51] [P2P-OK] Enviado frame 60. Tamaño: 52319 bytes
+[2026-06-19 14:24:48] [GUARDIAN] Iniciando agente...
+[2026-06-19 14:26:52] [GUARDIAN] Iniciando agente...
+[2026-06-19 14:28:56] [GUARDIAN] Iniciando agente...
+[2026-06-19 14:28:56] [SIGNALING] Configuración pendiente...
+[2026-06-19 14:28:56] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 14:30:36] [GUARDIAN] Iniciando agente...
+[2026-06-19 14:30:36] [SIGNALING] Configuración pendiente...
+[2026-06-19 14:30:36] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 14:33:53] [GUARDIAN] Iniciando agente...
+[2026-06-19 14:33:53] [SIGNALING] Configuración pendiente...
+[2026-06-19 14:33:53] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 14:42:07] [GUARDIAN] Iniciando agente...
+[2026-06-19 14:42:07] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 14:42:07] [SIGNALING] Escucha de señalización WebRTC activada de forma asíncrona.
+[2026-06-19 14:42:07] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 16:59:33] [GUARDIAN] Iniciando agente...
+[2026-06-19 16:59:33] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 16:59:33] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 16:59:33] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 16:59:33] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:00:50] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:00:50] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:00:50] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:00:50] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:00:50] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:05:50] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:05:50] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:05:50] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:05:50] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:05:50] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:21:29] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:21:29] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:21:29] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:21:29] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:21:29] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:23:33] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:23:33] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:23:33] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:23:33] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:23:33] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:23:47] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:23:47] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:23:47] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:23:47] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:23:47] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:25:01] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:25:01] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:25:01] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:25:01] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:25:01] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:35:45] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:35:45] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:35:45] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:35:45] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:35:45] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:38:37] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:38:37] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:38:37] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:38:37] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:38:37] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:38:57] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:38:57] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:38:57] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:38:57] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:38:57] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:42:08] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:42:08] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:42:08] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:42:08] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:42:08] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:44:31] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:44:31] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:44:31] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:44:31] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:44:31] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:46:15] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:46:15] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:46:15] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:46:15] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:46:15] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:47:51] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:47:51] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:47:51] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:47:51] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:47:51] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:49:57] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:49:58] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:49:58] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:49:58] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:49:58] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:50:09] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:50:09] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:50:09] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:50:09] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:50:09] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:50:52] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:50:53] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:50:53] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:50:53] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:50:53] [GUARDIAN] Agente listo. Esperando conexión...
+[2026-06-19 17:57:11] [GUARDIAN] Iniciando agente...
+[2026-06-19 17:57:11] [SIGNALING] Conectando a WebSocket: ws://192.168.1.135:8080/...
+[2026-06-19 17:57:11] [SIGNALING] Oferta inicial WebRTC enviada al Visor.
+[2026-06-19 17:57:11] [SIGNALING] Escucha de respuestas WebRTC activada de forma asíncrona.
+[2026-06-19 17:57:11] [GUARDIAN] Agente listo. Esperando conexión...
