@@ -119,17 +119,96 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    pc.on_data_channel(Box::new(|d| {
-        println!("[AGENTE] Canal de control abierto por el Visor via WebRTC DataChannel: {}", d.label());
+    // CANAL MPSC PUENTE
+    let (tx_control, mut rx_control) = tokio::sync::mpsc::channel::<CommandPayload>(100);
+
+    // Clonamos antes del primer move para evitar que on_data_channel consuma la variable original
+    let tx_on_data_channel = tx_control.clone();
+    pc.on_data_channel(Box::new(move |d| {
+        println!("[AGENTE] Canal de control remoto solicitado por el Visor: {}", d.label());
+        let tx_clone = tx_on_data_channel.clone();
+        
         Box::pin(async move {
-            d.on_message(Box::new(|msg| {
+            d.on_message(Box::new(move |msg| {
                 if let Ok(text) = std::str::from_utf8(&msg.data) {
-                    println!("[COMMAND-DC] Comando por canal seguro: {}", text);
+                    if let Ok(cmd) = serde_json::from_str::<CommandPayload>(text) {
+                        let tx = tx_clone.clone();
+                        tokio::spawn(async move {
+                            let _ = tx.send(cmd).await;
+                        });
+                    }
                 }
                 Box::pin(async {})
             }));
         })
     }));
+
+    // OPCIÓN A: El Agente toma la iniciativa y crea el DataChannel antes de la Oferta SDP
+    let data_channel = pc.create_data_channel("control", None).await?;
+    println!("[AGENTE] DataChannel 'control' inicializado localmente.");
+
+    let tx_channel_clone = tx_control.clone();
+    data_channel.on_message(Box::new(move |msg| {
+        if let Ok(text) = std::str::from_utf8(&msg.data) {
+            if let Ok(cmd) = serde_json::from_str::<CommandPayload>(text) {
+                let tx = tx_channel_clone.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(cmd).await;
+                });
+            }
+        }
+        Box::pin(async {})
+    }));
+
+    // 🔥 HILO ACTOR EXCLUSIVO NATIVO 
+    std::thread::spawn(move || {
+        let mut enigo = Enigo::new(&Settings::default()).unwrap();
+        
+        let (w, h) = enigo.main_display().unwrap_or((1920, 1080));
+        println!("[AGENTE-CONTROL] Pantalla detectada automáticamente: {}x{}", w, h);
+        
+        let pantalla_ancho_real = w as f64;
+        let pantalla_alto_real = h as f64;
+
+        while let Some(cmd) = rx_control.blocking_recv() {
+            match cmd.event.as_str() {
+                "mouse_move" => {
+                    if cmd.w_nativa > 0.0 && cmd.h_nativa > 0.0 {
+                        let real_x = (cmd.x_píxel / cmd.w_nativa) * pantalla_ancho_real;
+                        let real_y = (cmd.y_píxel / cmd.h_nativa) * pantalla_alto_real;
+                        let _ = enigo.move_mouse(real_x as i32, real_y as i32, enigo::Coordinate::Abs);
+                    }
+                }
+                "mouse_down" => {
+                    let boton = if cmd.button == "right" { enigo::Button::Right } else { enigo::Button::Left };
+                    let _ = enigo.button(boton, Direction::Press);
+                }
+                "mouse_up" => {
+                    let boton = if cmd.button == "right" { enigo::Button::Right } else { enigo::Button::Left };
+                    let _ = enigo.button(boton, Direction::Release);
+                }
+                "scroll" => {
+                    if cmd.delta_y != 0 {
+                        let _ = enigo.scroll(cmd.delta_y, enigo::Axis::Vertical);
+                    }
+                    if cmd.delta_x != 0 {
+                        let _ = enigo.scroll(cmd.delta_x, enigo::Axis::Horizontal);
+                    }
+                }
+                "key_down" => {
+                    if let Some(k) = mapear_tecla(&cmd.key) {
+                        let _ = enigo.key(k, Direction::Press);
+                    }
+                }
+                "key_up" => {
+                    if let Some(k) = mapear_tecla(&cmd.key) {
+                        let _ = enigo.key(k, Direction::Release);
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
 
     pc.on_peer_connection_state_change(Box::new(|state| {
         println!("[AGENTE-WEBRTC] Estado de la conexión: {}", state);
@@ -142,9 +221,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ws_url = format!("ws://{}/api/remote/signaling/{}/agente?token={}", backend_host, session_uuid, token);
     println!("[AGENTE] Conectando al WebSocket de señalización...");
     let (ws_stream, _) = connect_async(ws_url).await?;
-    let (mut ws_tx, mut ws_rx) = ws_stream.split();
+    let (ws_tx, mut ws_rx) = ws_stream.split();
 
-    // Capturar candidatos ICE locales generados por este Mac y enviárselos al Visor
     let ws_tx_clone = Arc::new(tokio::sync::Mutex::new(ws_tx));
     let ws_tx_ice = Arc::clone(&ws_tx_clone);
     pc.on_ice_candidate(Box::new(move |candidate| {
@@ -196,26 +274,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         
-        println!("[AGENTE-VIDEO] Lanzando subproceso FFmpeg empaquetando en formato RTP nativo...");
+        println!("[AGENTE-VIDEO] Seleccionando codec y pipeline de vídeo...");
+
+        #[cfg(target_os = "macos")]
+        let ffmpeg_args = vec![
+            "-f", "avfoundation",
+            "-capture_cursor", "1",
+            "-pixel_format", "nv12",
+            "-i", "1",
+            "-r", "30",
+            "-vf", "scale=1280:-1",      
+            "-vcodec", "h264_videotoolbox", 
+            "-realtime", "1",
+            "-bf", "0",                  
+            "-prio_speed", "1",
+            "-q:v", "55",                
+            "-g", "30",                  
+            "-f", "rtp",
+            "-payload_type", "96", 
+            "rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760"
+        ];
+
+        #[cfg(target_os = "linux")]
+        let ffmpeg_args = vec![
+            "-f", "x11grab",
+            "-video_size", "1280x720",
+            "-i", ":0.0",
+            "-r", "30",
+            "-c:v", "h264_v4l2m2m", 
+            "-b:v", "2M",
+            "-pix_fmt", "yuv420p",
+            "-g", "30",                  
+            "-f", "rtp",
+            "-payload_type", "96", 
+            "rtp://127.0.0.1:5004?pkt_size=1200"
+        ];
 
         let mut child = match Command::new("ffmpeg")
-            .args(&[
-                "-f", "avfoundation",
-                "-capture_cursor", "1",
-                "-pixel_format", "nv12",
-                "-i", "1",
-                "-r", "30",
-                "-vf", "scale=1280:-1",      
-                "-vcodec", "h264_videotoolbox", 
-                "-realtime", "1",
-                "-bf", "0",                  
-                "-prio_speed", "1",
-                "-q:v", "55",                
-                "-g", "30",                  
-                "-f", "rtp",
-                "-payload_type", "96", 
-                "rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760"
-            ])
+            .args(&ffmpeg_args)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null()) 
             .spawn() 
@@ -247,21 +343,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = child.kill().await;
     });
 
-    // Inicialización del motor Enigo para macOS
-    let mut enigo = Enigo::new(&Settings::default()).unwrap();
-    
-    // Dimensiones lógicas reales de tu monitor (Cámbialas según tu pantalla si es necesario)
-    let pantalla_ancho_real = 1440.0;
-    let pantalla_alto_real = 900.0;
-
-    // Escucha de mensajes del WebSocket
+    // Escucha permanente del WebSocket de señalización
     let pc_clone = Arc::clone(&pc);
     while let Some(Ok(msg)) = ws_rx.next().await {
         if let Message::Text(text) = msg {
             let text_str = text.as_str();
             
             if let Ok(payload) = serde_json::from_str::<SignalingMessage>(text_str) {
-                // 1. Procesar Respuesta SDP (Answer)
                 if let Some(sdp_data) = payload.sdp {
                     if sdp_data.sdp_type == "answer" {
                         println!("[AGENTE] Recibida respuesta 'answer' del Visor. Aplicando...");
@@ -276,54 +364,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
-                // 2. Procesar Candidatos ICE remotos
                 else if let Some(ice_data) = payload.ice {
                     if let Ok(ice_init) = serde_json::from_value::<webrtc::ice_transport::ice_candidate::RTCIceCandidateInit>(ice_data) {
                         if let Err(e) = pc_clone.add_ice_candidate(ice_init).await {
                             eprintln!("[AGENTE-ICE-WARN] Error agregando candidato ICE del visor: {}", e);
                         }
-                    } else {
-                        eprintln!("[AGENTE-ICE-ERROR] Falló al deserializar el candidato ICE recibido.");
                     }
-                }
-            } 
-            // 🔥 CONTROL INTERACTIVO: Decodificar y ejecutar acciones físicas de perifericos
-            else if let Ok(cmd) = serde_json::from_str::<CommandPayload>(text_str) {
-                match cmd.event.as_str() {
-                    "mouse_move" => {
-                        if cmd.w_nativa > 0.0 && cmd.h_nativa > 0.0 {
-                            let real_x = (cmd.x_píxel / cmd.w_nativa) * pantalla_ancho_real;
-                            let real_y = (cmd.y_píxel / cmd.h_nativa) * pantalla_alto_real;
-                            let _ = enigo.move_mouse(real_x as i32, real_y as i32, enigo::Coordinate::Abs);
-                        }
-                    }
-                    "mouse_down" => {
-                        let boton = if cmd.button == "right" { enigo::Button::Right } else { enigo::Button::Left };
-                        let _ = enigo.button(boton, Direction::Press);
-                    }
-                    "mouse_up" => {
-                        let boton = if cmd.button == "right" { enigo::Button::Right } else { enigo::Button::Left };
-                        let _ = enigo.button(boton, Direction::Release);
-                    }
-                    "scroll" => {
-                        if cmd.delta_y != 0 {
-                            let _ = enigo.scroll(cmd.delta_y, enigo::Axis::Vertical);
-                        }
-                        if cmd.delta_x != 0 {
-                            let _ = enigo.scroll(cmd.delta_x, enigo::Axis::Horizontal);
-                        }
-                    }
-                    "key_down" => {
-                        if let Some(k) = mapear_tecla(&cmd.key) {
-                            let _ = enigo.key(k, Direction::Press);
-                        }
-                    }
-                    "key_up" => {
-                        if let Some(k) = mapear_tecla(&cmd.key) {
-                            let _ = enigo.key(k, Direction::Release);
-                        }
-                    }
-                    _ => {}
                 }
             }
         }
@@ -332,7 +378,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Mapeador auxiliar de cadenas de texto Web (JavaScript) a estructuras nativas de Enigo
 fn mapear_tecla(key_str: &str) -> Option<Key> {
     match key_str {
         "Enter" => Some(Key::Return),
