@@ -11,7 +11,6 @@ use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264};
 use webrtc::api::APIBuilder;
 use enigo::{Direction, Enigo, Keyboard, Mouse, Settings};
 use webrtc::peer_connection::configuration::RTCConfiguration;
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_transceiver_direction::RTCRtpTransceiverDirection};
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -44,6 +43,34 @@ struct SignalingMessage {
 
 #[derive(Deserialize)]
 struct AuthResponse { access_token: String }
+
+/// 🕵️‍♂️ AUTO-DETECCIÓN DINÁMICA DE PANTALLAS PARA PRODUCCIÓN (AVFOUNDATION)
+#[cfg(target_os = "macos")]
+async fn obtener_indices_pantalla_macos() -> Vec<String> {
+    let output = Command::new("ffmpeg")
+        .args(&["-f", "avfoundation", "-list_devices", "true", "-i", ""])
+        .output()
+        .await;
+
+    let mut pantallas_detectadas = Vec::new();
+    if let Ok(out) = output {
+        let stderr_txt = String::from_utf8_lossy(&out.stderr);
+        for line in stderr_txt.lines() {
+            if line.contains("Capture screen") {
+                if let Some(pos_dispositivo) = line.find(']') {
+                    let resto_linea = &line[pos_dispositivo + 1..];
+                    if let (Some(start), Some(end)) = (resto_linea.find('['), resto_linea.find(']')) {
+                        let idx = resto_linea[start + 1..end].trim().to_string();
+                        if !idx.is_empty() {
+                            pantallas_detectadas.push(idx);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    pantallas_detectadas
+}
 
 pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let backend_host = "192.168.1.135:8080";
@@ -110,15 +137,26 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         Box::pin(async {})
     }));
 
+    // 💡 DETERMINAMOS DE FORMA ESTABLE QUÉ MONITOR SOLICITÓ LA GUI
+    // Si el string de la interfaz contiene un índice secundario conocido, marcamos true.
+    let mapear_secundaria = id_pantalla.trim().contains('3') || id_pantalla.trim().contains('1');
+
     std::thread::spawn(move || {
         let mut enigo = Enigo::new(&Settings::default()).unwrap();
         let (w, h) = enigo.main_display().unwrap_or((1920, 1080));
+
         while let Some(cmd) = rx_control.blocking_recv() {
             match cmd.event.as_str() {
                 "mouse_move" => {
                     if cmd.w_nativa > 0.0 && cmd.h_nativa > 0.0 {
-                        let real_x = (cmd.x_píxel / cmd.w_nativa) * w as f64;
+                        let mut real_x = (cmd.x_píxel / cmd.w_nativa) * w as f64;
                         let real_y = (cmd.y_píxel / cmd.h_nativa) * h as f64;
+                        
+                        // 💡 SI TRANSMITIMOS SECUNDARIA, EL RATÓN SE DESPLAZA AL MONITOR VIRTUAL DERECHO
+                        if mapear_secundaria {
+                            real_x += w as f64;
+                        }
+
                         let _ = enigo.move_mouse(real_x as i32, real_y as i32, enigo::Coordinate::Abs);
                     }
                 }
@@ -193,85 +231,56 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
     ws_tx_clone.lock().await.send(Message::Text(serde_json::to_string(&mensaje_oferta)?.into())).await?;
     log("[AGENTE] Oferta SDP enviada al visor.", &state);
 
-    let id_pantalla_ffmpeg = id_pantalla.clone();
     let track_clone = Arc::clone(&video_track);
     
+    #[cfg(target_os = "macos")]
+    let pantallas_detectadas = obtener_indices_pantalla_macos().await;
+
     tokio::spawn(async move {
         let listener = UdpSocket::bind("127.0.0.1:5004").await.unwrap();
         
-        // 🎯 Autodescubrimiento dinámico del índice de pantalla real en macOS
         #[cfg(target_os = "macos")]
-        let indice_pantalla = {
-            let output = std::process::Command::new("ffmpeg")
-                .args(&["-f", "avfoundation", "-list_devices", "true", "-i", ""])
-                .output()
-                .map(|o| String::from_utf8_lossy(&o.stderr).into_owned())
-                .unwrap_or_default();
-
-            let mut encontrado = None;
-            for line in output.lines() {
-                if line.contains("Capture screen") {
-                    let fragmento = &line[..line.find("Capture screen").unwrap_or(line.len())];
-                    if let Some(pos_corchete) = fragmento.rfind('[') {
-                        if let Some(pos_cierre) = fragmento[pos_corchete..].find(']') {
-                            let sub = &fragmento[pos_corchete + 1..pos_corchete + pos_cierre];
-                            if sub.chars().all(|c| c.is_ascii_digit()) {
-                                encontrado = Some(sub.to_string());
-                                break;
-                            }
-                        }
-                    }
-                }
+        let avf_index = {
+            // 🎯 SINCRONIZACIÓN PERFECTA: Mapeamos el índice según lo que dictaminó la GUI establemente
+            if mapear_secundaria && pantallas_detectadas.len() > 1 {
+                println!("[AGENTE] -> MONITOR DETECTADO: Usando secundaria nativa '{}'", pantallas_detectadas[1]);
+                pantallas_detectadas[1].clone()
+            } else if !pantallas_detectadas.is_empty() {
+                println!("[AGENTE] -> MONITOR DETECTADO: Usando principal nativa '{}'", pantallas_detectadas[0]);
+                pantallas_detectadas[0].clone()
+            } else {
+                "2".to_string()
             }
-            encontrado.unwrap_or_else(|| "1".to_string())
         };
 
         #[cfg(not(target_os = "macos"))]
-        let indice_pantalla = id_pantalla_ffmpeg.trim().to_string();
+        let avf_index = id_pantalla.trim().to_string();
 
-        let avf_index = format!("{}:", indice_pantalla);
-        println!("[AGENTE] Índice de captura asignado dinámicamente: '{}'", avf_index);
+        println!("[AGENTE] Inicializando captura unificada de vídeo para el índice: {}", avf_index);
 
         #[cfg(target_os = "macos")]
-        let ffmpeg_args = vec![
-            "-f", "avfoundation",
-            "-capture_cursor", "1",
-            "-pixel_format", "nv12",
-            "-i", &avf_index, 
-            "-r", "30",
-            "-vf", "scale=1280:-2:flags=lanczos,format=yuv420p",
-            "-vcodec", "h264_videotoolbox", 
-            "-realtime", "1",
-            "-bf", "0",
-            "-profile:v", "baseline",
-            "-prio_speed", "1",
-            "-b:v", "2000k",
-            "-maxrate", "2500k",
-            "-bufsize", "4000k",
-            "-g", "30",
-            "-bsf:v", "dump_extra", 
-            "-f", "rtp",
-            "-payload_type", "96", 
-            "rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760"
-        ];
+        let ffmpeg_cmd_string = format!(
+            "ffmpeg -nostdin -f avfoundation -capture_cursor 1 -pixel_format nv12 -i \"{}\" -r 30 -vf \"scale=1280:-2:flags=lanczos,format=yuv420p\" -vcodec h264_videotoolbox -realtime 1 -bf 0 -profile:v baseline -prio_speed 1 -b:v 2000k -maxrate 2500k -bufsize 4000k -g 30 -bsf:v dump_extra -f rtp -payload_type 96 \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"",
+            avf_index
+        );
 
-        #[cfg(target_os = "linux")]
-        let ffmpeg_args = vec![
-            "-f", "x11grab", 
-            "-video_size", "1280x720", 
-            "-i", &indice_pantalla,
-            "-r", "30", 
-            "-c:v", "h264_v4l2m2m", 
-            "-b:v", "2M", 
-            "-pix_fmt", "yuv420p", 
-            "-f", "rtp", 
-            "-payload_type", "96", 
-            "rtp://127.0.0.1:5004?pkt_size=1200"
-        ];
+        #[cfg(target_os = "macos")]
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg(&ffmpeg_cmd_string)
+            .stdout(std::process::Stdio::inherit()) 
+            .stderr(std::process::Stdio::inherit())
+            .spawn()
+            .unwrap();
 
+        #[cfg(not(target_os = "macos"))]
         let mut child = Command::new("ffmpeg")
-            .args(&ffmpeg_args)
-            .stdout(std::process::Stdio::null())
+            .args(&[
+                "-f", "x11grab", "-video_size", "1280x720", "-i", &avf_index,
+                "-r", "30", "-c:v", "h264_v4l2m2m", "-b:v", "2M", "-pix_fmt", "yuv420p",
+                "-f", "rtp", "-payload_type", "96", "rtp://127.0.0.1:5004?pkt_size=1200"
+            ])
+            .stdout(std::process::Stdio::inherit()) 
             .stderr(std::process::Stdio::inherit())
             .spawn()
             .unwrap();
