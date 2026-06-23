@@ -151,7 +151,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                 "key_up" => {
                     if let Some(k) = mapear_tecla(&cmd.key) {
                         match k {
-                            enigo::Key::Unicode(_) => {} // Inyección de texto directa no requiere soltar evento de hardware
+                            enigo::Key::Unicode(_) => {}
                             tecla_especial => {
                                 let _ = enigo.key(tecla_especial, Direction::Release);
                             }
@@ -193,39 +193,101 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
     ws_tx_clone.lock().await.send(Message::Text(serde_json::to_string(&mensaje_oferta)?.into())).await?;
     log("[AGENTE] Oferta SDP enviada al visor.", &state);
 
+    let id_pantalla_ffmpeg = id_pantalla.clone();
     let track_clone = Arc::clone(&video_track);
+    
     tokio::spawn(async move {
         let listener = UdpSocket::bind("127.0.0.1:5004").await.unwrap();
+        
+        // 🎯 Autodescubrimiento dinámico del índice de pantalla real en macOS
+        #[cfg(target_os = "macos")]
+        let indice_pantalla = {
+            let output = std::process::Command::new("ffmpeg")
+                .args(&["-f", "avfoundation", "-list_devices", "true", "-i", ""])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stderr).into_owned())
+                .unwrap_or_default();
+
+            let mut encontrado = None;
+            for line in output.lines() {
+                if line.contains("Capture screen") {
+                    let fragmento = &line[..line.find("Capture screen").unwrap_or(line.len())];
+                    if let Some(pos_corchete) = fragmento.rfind('[') {
+                        if let Some(pos_cierre) = fragmento[pos_corchete..].find(']') {
+                            let sub = &fragmento[pos_corchete + 1..pos_corchete + pos_cierre];
+                            if sub.chars().all(|c| c.is_ascii_digit()) {
+                                encontrado = Some(sub.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            encontrado.unwrap_or_else(|| "1".to_string())
+        };
+
+        #[cfg(not(target_os = "macos"))]
+        let indice_pantalla = id_pantalla_ffmpeg.trim().to_string();
+
+        let avf_index = format!("{}:", indice_pantalla);
+        println!("[AGENTE] Índice de captura asignado dinámicamente: '{}'", avf_index);
+
         #[cfg(target_os = "macos")]
         let ffmpeg_args = vec![
             "-f", "avfoundation",
             "-capture_cursor", "1",
             "-pixel_format", "nv12",
-            "-i", "1",
+            "-i", &avf_index, 
             "-r", "30",
-            "-vf", "scale=1280:-1,format=yuv420p",
+            "-vf", "scale=1280:-2:flags=lanczos,format=yuv420p",
             "-vcodec", "h264_videotoolbox", 
             "-realtime", "1",
             "-bf", "0",
             "-profile:v", "baseline",
             "-prio_speed", "1",
-            "-q:v", "55", 
+            "-b:v", "2000k",
+            "-maxrate", "2500k",
+            "-bufsize", "4000k",
             "-g", "30",
+            "-bsf:v", "dump_extra", 
             "-f", "rtp",
-            "-payload_type", "102",
+            "-payload_type", "96", 
             "rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760"
         ];
+
         #[cfg(target_os = "linux")]
         let ffmpeg_args = vec![
-            "-f", "x11grab", "-video_size", "1280x720", "-i", &id_pantalla,
-            "-r", "30", "-c:v", "h264_v4l2m2m", "-b:v", "2M", "-pix_fmt", "yuv420p", "-f", "rtp", "-payload_type", "96", "rtp://127.0.0.1:5004?pkt_size=1200"
+            "-f", "x11grab", 
+            "-video_size", "1280x720", 
+            "-i", &indice_pantalla,
+            "-r", "30", 
+            "-c:v", "h264_v4l2m2m", 
+            "-b:v", "2M", 
+            "-pix_fmt", "yuv420p", 
+            "-f", "rtp", 
+            "-payload_type", "96", 
+            "rtp://127.0.0.1:5004?pkt_size=1200"
         ];
 
-        let mut child = Command::new("ffmpeg").args(&ffmpeg_args).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
-        let mut inbound_buffer = vec![0u8; 2048];
+        let mut child = Command::new("ffmpeg")
+            .args(&ffmpeg_args)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::inherit())
+            .spawn()
+            .unwrap();
+            
         loop {
+            let mut inbound_buffer = vec![0u8; 2048];
             match listener.recv_from(&mut inbound_buffer).await {
-                Ok((n, _)) => { if track_clone.write(&inbound_buffer[..n]).await.is_err() { break; } }
+                Ok((n, _)) => { 
+                    if n > 0 {
+                        let packet_data = inbound_buffer[..n].to_vec();
+                        let track_resilient = Arc::clone(&track_clone);
+                        if track_resilient.write(&packet_data).await.is_err() { 
+                            break; 
+                        } 
+                    }
+                }
                 Err(_) => break,
             }
         }
