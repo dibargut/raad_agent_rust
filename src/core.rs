@@ -277,7 +277,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         }
     });
 
-    // 💡 OYENTE DINÁMICO DE PROCESOS FFmpeg (Orquestador Hot-Swap con Inyección de Keyframes)
+    // 💡 OYENTE DINÁMICO DE PROCESOS FFmpeg (Orquestador Hot-Swap de Alto Rendimiento)
     tokio::spawn(async move {
         loop {
             #[cfg(target_os = "macos")]
@@ -301,14 +301,14 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
 
             println!("[HOT-SWAP] Levantando pipeline FFmpeg real para monitor índice: {}", avf_index);
 
-            // ⚡ COMANDO ULTRA-ROBUSTO: Mantiene aspecto fijo 1280x720 e inyecta IDR frames de forma agresiva cada 15 frames
+            // ⚡ COMANDO ULTRA-RENDIMIENTO: 60 FPS estables y latencia optimizada para acelerar la conmutación
             #[cfg(target_os = "macos")]
             let ffmpeg_cmd_string = format!(
-                "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -i \"{}\" \
-                -r 30 -vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p\" \
-                -vcodec h264_videotoolbox -realtime 1 -bf 0 -profile:v baseline -prio_speed 1 \
-                -b:v 2000k -maxrate 2500k -bufsize 4000k \
-                -g 15 -keyint_min 15 -forced-idr 1 -bsf:v dump_extra -f rtp -payload_type 96 \
+                "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 60 -i \"{}\" \
+                -r 60 -vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p\" \
+                -vcodec h264_videotoolbox -realtime 1 -tune zerolatency -bf 0 -profile:v baseline -prio_speed 1 \
+                -b:v 3500k -maxrate 4000k -bufsize 2000k \
+                -g 30 -keyint_min 30 -forced-idr 1 -bsf:v dump_extra -f rtp -payload_type 96 \
                 \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"",
                 avf_index
             );
@@ -326,7 +326,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             let mut child = Command::new("ffmpeg")
                 .args(&[
                     "-nostdin", "-y", "-f", "x11grab", "-video_size", "1280x720", "-i", &avf_index,
-                    "-r", "30", "-c:v", "h264_v4l2m2m", "-b:v", "2M", "-pix_fmt", "yuv420p",
+                    "-r", "60", "-c:v", "h264_v4l2m2m", "-b:v", "3M", "-pix_fmt", "yuv420p",
                     "-f", "rtp", "-payload_type", "96", "rtp://127.0.0.1:5004?pkt_size=1200"
                 ])
                 .stdout(std::process::Stdio::null())
@@ -346,8 +346,8 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                 }
             }
             
-            // ⏳ Pequeña pausa táctica para asegurar la limpieza del pipeline de captura antes de instanciar el nuevo
-            sleep(Duration::from_millis(400)).await; 
+            // ⏳ Reducido el delay táctico para acelerar la re-instanciación instantánea
+            sleep(Duration::from_millis(250)).await; 
         }
     });
 
