@@ -3,7 +3,7 @@ use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use crate::video::detectar_pantallas_sistema;
-use crate::core::ejecutar_core_agente;
+use crate::core::{ejecutar_core_agente, conmutar_pantalla_caliente}; // 👈 Importamos la nueva función del core
 
 pub struct AppState {
     pub pantallas: Vec<(String, String)>,
@@ -24,7 +24,7 @@ pub fn lanzar_interfaz(tokio_handle: tokio::runtime::Handle) -> Result<(), efram
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([450.0, 320.0])
+            .with_inner_size([450.0, 360.0]) // Ampliamos ligeramente el alto para el botón extra
             .with_resizable(false),
         ..Default::default()
     };
@@ -68,9 +68,33 @@ pub fn lanzar_interfaz(tokio_handle: tokio::runtime::Handle) -> Result<(), efram
                     });
                 }
             } else {
-                // Si ya está transmitiendo, mostramos estado de bloqueo seguro
+                // 🟢 SI YA ESTÁ TRANSMITIENDO, ADEMÁS DEL ESTADO AGREGAMOS EL BOTÓN DE CAMBIO DE PANTALLA
                 ui.colored_label(egui::Color32::GREEN, "🟢 Transmitiendo vídeo y control remoto activo...");
                 ui.label(format!("Compartiendo actualmente el índice: {}", guard.pantalla_seleccionada.as_ref().unwrap()));
+                
+                ui.add_space(5.0);
+                
+                // Determinamos cuál es la otra pantalla disponible para ofrecer el intercambio inverso
+                let actual_id = guard.pantalla_seleccionada.as_ref().unwrap().clone();
+                let es_actual_secundaria = actual_id.contains('3') || actual_id.contains('1');
+                
+                let texto_boton = if es_actual_secundaria {
+                    "🔄 Cambiar a Pantalla Principal"
+                } else {
+                    "🔄 Cambiar a Pantalla Secundaria"
+                };
+
+                if ui.button(texto_boton).clicked() {
+                    let cambiar_a_secundaria = !es_actual_secundaria;
+                    
+                    // 1. Notificamos al orquestador en caliente
+                    conmutar_pantalla_caliente(cambiar_a_secundaria);
+                    
+                    // 2. Reflejamos el cambio visualmente en la interfaz actualizando el ID simulado
+                    let nuevo_id = if cambiar_a_secundaria { "3".to_string() } else { "2".to_string() };
+                    guard.pantalla_seleccionada = Some(nuevo_id.clone());
+                    guard.logs.push(format!("[HOT-SWAP] Cambiando transmisión dinámicamente a monitor {}", nuevo_id));
+                }
             }
 
             ui.separator();

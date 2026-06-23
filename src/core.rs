@@ -2,6 +2,7 @@
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::UdpSocket;
 use tokio::process::Command;
 use tokio::time::{sleep, Duration};
@@ -18,6 +19,11 @@ use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 
 use crate::gui::AppState;
 use crate::input::mapear_tecla;
+
+// 💡 Estado global para que el hilo de Enigo sepa en tiempo real si aplicar offset al ratón
+static SELECCION_MONITOR_SECUNDARIO: AtomicBool = AtomicBool::new(false);
+// 💡 Canal interno global para notificar el cambio de pantalla al hilo de FFmpeg
+static REINICIAR_FFMPEG_TX: Mutex<Option<tokio::sync::mpsc::Sender<()>>> = Mutex::new(None);
 
 #[derive(Serialize, Deserialize, Clone)]
 struct CommandPayload {
@@ -70,6 +76,20 @@ async fn obtener_indices_pantalla_macos() -> Vec<String> {
         }
     }
     pantallas_detectadas
+}
+
+/// 🚀 FUNCIÓN PÚBLICA PARA QUE LA GUI CAMBIE DE PANTALLA EN CALIENTE
+pub fn conmutar_pantalla_caliente(hacia_secundaria: bool) {
+    // 1. Actualizamos el offset del ratón instantáneamente
+    SELECCION_MONITOR_SECUNDARIO.store(hacia_secundaria, Ordering::SeqCst);
+    
+    // 2. Mandamos señal al loop de FFmpeg para que muera y renazca con el nuevo índice
+    if let Some(tx) = &*REINICIAR_FFMPEG_TX.lock().unwrap() {
+        let tx_clone = tx.clone();
+        tokio::spawn(async move {
+            let _ = tx_clone.send(()).await;
+        });
+    }
 }
 
 pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -137,9 +157,9 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         Box::pin(async {})
     }));
 
-    // 💡 DETERMINAMOS DE FORMA ESTABLE QUÉ MONITOR SOLICITÓ LA GUI
-    // Si el string de la interfaz contiene un índice secundario conocido, marcamos true.
-    let mapear_secundaria = id_pantalla.trim().contains('3') || id_pantalla.trim().contains('1');
+    // Seteamos el estado inicial según lo que seleccionó la GUI al arrancar
+    let arranque_secundaria = id_pantalla.trim().contains('3') || id_pantalla.trim().contains('1');
+    SELECCION_MONITOR_SECUNDARIO.store(arranque_secundaria, Ordering::SeqCst);
 
     std::thread::spawn(move || {
         let mut enigo = Enigo::new(&Settings::default()).unwrap();
@@ -152,8 +172,8 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                         let mut real_x = (cmd.x_píxel / cmd.w_nativa) * w as f64;
                         let real_y = (cmd.y_píxel / cmd.h_nativa) * h as f64;
                         
-                        // 💡 SI TRANSMITIMOS SECUNDARIA, EL RATÓN SE DESPLAZA AL MONITOR VIRTUAL DERECHO
-                        if mapear_secundaria {
+                        // 💡 Lee dinámicamente el estado atómico modificado por el botón de la GUI
+                        if SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst) {
                             real_x += w as f64;
                         }
 
@@ -233,66 +253,21 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
 
     let track_clone = Arc::clone(&video_track);
     
-    #[cfg(target_os = "macos")]
-    let pantallas_detectadas = obtener_indices_pantalla_macos().await;
+    // 💡 Preparamos el canal de reinicios de FFmpeg y lo guardamos en la variable global estática
+    let (tx_reiniciar, mut rx_reiniciar) = tokio::sync::mpsc::channel::<()>(10);
+    *REINICIAR_FFMPEG_TX.lock().unwrap() = Some(tx_reiniciar);
 
+    // Hilo persistente del socket UDP intermedio que reenvía a WebRTC sin importar los reinicios de FFmpeg
+    let track_udp_worker = Arc::clone(&track_clone);
     tokio::spawn(async move {
         let listener = UdpSocket::bind("127.0.0.1:5004").await.unwrap();
-        
-        #[cfg(target_os = "macos")]
-        let avf_index = {
-            // 🎯 SINCRONIZACIÓN PERFECTA: Mapeamos el índice según lo que dictaminó la GUI establemente
-            if mapear_secundaria && pantallas_detectadas.len() > 1 {
-                println!("[AGENTE] -> MONITOR DETECTADO: Usando secundaria nativa '{}'", pantallas_detectadas[1]);
-                pantallas_detectadas[1].clone()
-            } else if !pantallas_detectadas.is_empty() {
-                println!("[AGENTE] -> MONITOR DETECTADO: Usando principal nativa '{}'", pantallas_detectadas[0]);
-                pantallas_detectadas[0].clone()
-            } else {
-                "2".to_string()
-            }
-        };
-
-        #[cfg(not(target_os = "macos"))]
-        let avf_index = id_pantalla.trim().to_string();
-
-        println!("[AGENTE] Inicializando captura unificada de vídeo para el índice: {}", avf_index);
-
-        #[cfg(target_os = "macos")]
-        let ffmpeg_cmd_string = format!(
-            "ffmpeg -nostdin -f avfoundation -capture_cursor 1 -pixel_format nv12 -i \"{}\" -r 30 -vf \"scale=1280:-2:flags=lanczos,format=yuv420p\" -vcodec h264_videotoolbox -realtime 1 -bf 0 -profile:v baseline -prio_speed 1 -b:v 2000k -maxrate 2500k -bufsize 4000k -g 30 -bsf:v dump_extra -f rtp -payload_type 96 \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"",
-            avf_index
-        );
-
-        #[cfg(target_os = "macos")]
-        let mut child = Command::new("sh")
-            .arg("-c")
-            .arg(&ffmpeg_cmd_string)
-            .stdout(std::process::Stdio::inherit()) 
-            .stderr(std::process::Stdio::inherit())
-            .spawn()
-            .unwrap();
-
-        #[cfg(not(target_os = "macos"))]
-        let mut child = Command::new("ffmpeg")
-            .args(&[
-                "-f", "x11grab", "-video_size", "1280x720", "-i", &avf_index,
-                "-r", "30", "-c:v", "h264_v4l2m2m", "-b:v", "2M", "-pix_fmt", "yuv420p",
-                "-f", "rtp", "-payload_type", "96", "rtp://127.0.0.1:5004?pkt_size=1200"
-            ])
-            .stdout(std::process::Stdio::inherit()) 
-            .stderr(std::process::Stdio::inherit())
-            .spawn()
-            .unwrap();
-            
         loop {
             let mut inbound_buffer = vec![0u8; 2048];
             match listener.recv_from(&mut inbound_buffer).await {
                 Ok((n, _)) => { 
                     if n > 0 {
                         let packet_data = inbound_buffer[..n].to_vec();
-                        let track_resilient = Arc::clone(&track_clone);
-                        if track_resilient.write(&packet_data).await.is_err() { 
+                        if track_udp_worker.write(&packet_data).await.is_err() { 
                             break; 
                         } 
                     }
@@ -300,7 +275,80 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                 Err(_) => break,
             }
         }
-        let _ = child.kill().await;
+    });
+
+    // 💡 OYENTE DINÁMICO DE PROCESOS FFmpeg (Orquestador Hot-Swap con Inyección de Keyframes)
+    tokio::spawn(async move {
+        loop {
+            #[cfg(target_os = "macos")]
+            let pantallas_detectadas = obtener_indices_pantalla_macos().await;
+
+            let usar_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
+
+            #[cfg(target_os = "macos")]
+            let avf_index = {
+                if usar_secundaria && pantallas_detectadas.len() > 1 {
+                    pantallas_detectadas[1].clone()
+                } else if !pantallas_detectadas.is_empty() {
+                    pantallas_detectadas[0].clone()
+                } else {
+                    "2".to_string()
+                }
+            };
+
+            #[cfg(not(target_os = "macos"))]
+            let avf_index = if usar_secundaria { "1".to_string() } else { "0".to_string() };
+
+            println!("[HOT-SWAP] Levantando pipeline FFmpeg real para monitor índice: {}", avf_index);
+
+            // ⚡ COMANDO ULTRA-ROBUSTO: Mantiene aspecto fijo 1280x720 e inyecta IDR frames de forma agresiva cada 15 frames
+            #[cfg(target_os = "macos")]
+            let ffmpeg_cmd_string = format!(
+                "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -i \"{}\" \
+                -r 30 -vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p\" \
+                -vcodec h264_videotoolbox -realtime 1 -bf 0 -profile:v baseline -prio_speed 1 \
+                -b:v 2000k -maxrate 2500k -bufsize 4000k \
+                -g 15 -keyint_min 15 -forced-idr 1 -bsf:v dump_extra -f rtp -payload_type 96 \
+                \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"",
+                avf_index
+            );
+
+            #[cfg(target_os = "macos")]
+            let mut child = Command::new("sh")
+                .arg("-c")
+                .arg(&ffmpeg_cmd_string)
+                .stdout(std::process::Stdio::null()) 
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+
+            #[cfg(not(target_os = "macos"))]
+            let mut child = Command::new("ffmpeg")
+                .args(&[
+                    "-nostdin", "-y", "-f", "x11grab", "-video_size", "1280x720", "-i", &avf_index,
+                    "-r", "30", "-c:v", "h264_v4l2m2m", "-b:v", "2M", "-pix_fmt", "yuv420p",
+                    "-f", "rtp", "-payload_type", "96", "rtp://127.0.0.1:5004?pkt_size=1200"
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+
+            // 🎯 Bucle select! con mitigación de procesos zombi
+            tokio::select! {
+                _ = rx_reiniciar.recv() => {
+                    println!("[HOT-SWAP] Conmutación solicitada. Forzando terminación de FFmpeg...");
+                    let _ = child.kill().await;
+                    let _ = child.wait().await; // Bloqueamos hasta que el puerto sea totalmente libre
+                }
+                status = child.wait() => {
+                    println!("[HOT-SWAP] FFmpeg finalizó de forma autónoma con estado: {:?}", status);
+                }
+            }
+            
+            // ⏳ Pequeña pausa táctica para asegurar la limpieza del pipeline de captura antes de instanciar el nuevo
+            sleep(Duration::from_millis(400)).await; 
+        }
     });
 
     let pc_clone = Arc::clone(&pc);
