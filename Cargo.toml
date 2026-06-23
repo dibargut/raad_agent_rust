@@ -1,3 +1,9 @@
+[env]
+# Esto le dice a pkg-config exactamente dónde buscar los .pc de FFmpeg 6
+PKG_CONFIG_PATH = "/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig"
+# Fuerza a que el enlazador busque las librerías estáticas/locales de esa ruta
+PKG_CONFIG_ALL_STATIC = "1"
+
 [package]
 name = "guardian-agent"
 version = "0.1.0"
@@ -17,4 +23,5 @@ bytes = "1.0"
 chrono = "0.4"
 url = "2.5"
 futures-util = "0.3"
-ffmpeg-next = "7.0" # ← Esta es la que faltaba añadir
+ffmpeg-next = { version = "7.1.0", features = ["ffmpeg4"] }
+eframe = "0.34.3"
