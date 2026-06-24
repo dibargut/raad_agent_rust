@@ -1,113 +1,153 @@
 // src/gui.rs
-use eframe::egui;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use crate::video::detectar_pantallas_sistema;
-use crate::core::{ejecutar_core_agente, conmutar_pantalla_caliente}; // 👈 Importamos la nueva función del core
+use eframe::egui;
 
-pub struct AppState {
-    pub pantallas: Vec<(String, String)>,
-    pub pantalla_seleccionada: Option<String>,
-    pub logs: Vec<String>,
+#[derive(Clone, PartialEq)]
+pub enum TipoConexion {
+    Inactiva,
+    SolicitudPendiente { visor_id: String },
+    Activa,
 }
 
-// 🎯 Ahora la función recibe el handle del runtime de Tokio desde el main
-pub fn lanzar_interfaz(tokio_handle: tokio::runtime::Handle) -> Result<(), eframe::Error> {
-    // 1. Detectar pantallas de forma síncrona antes de lanzar la GUI
-    let pantallas = detectar_pantallas_sistema();
+pub struct AppState {
+    pub logs: Vec<String>,
+    pub estado_conexion: TipoConexion,
+    pub pantalla_seleccionada_inicial: Option<String>,
+    pub respuesta_usuario: Option<bool>,
+}
 
-    let state = Arc::new(Mutex::new(AppState {
-        pantallas,
-        pantalla_seleccionada: None,
-        logs: vec!["[GUI] Agente listo. Selecciona una pantalla.".to_string()],
-    }));
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            logs: vec!["[SISTEMA] GUI Iniciada. Esperando arranque del Agente...".to_string()],
+            estado_conexion: TipoConexion::Inactiva,
+            pantalla_seleccionada_inicial: None,
+            respuesta_usuario: None,
+        }
+    }
+}
 
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([450.0, 360.0]) // Ampliamos ligeramente el alto para el botón extra
-            .with_resizable(false),
-        ..Default::default()
-    };
+pub struct GuardianGui {
+    pub state: Arc<Mutex<AppState>>,
+}
 
-    let state_gui = Arc::clone(&state);
-    
-    eframe::run_simple_native("Guardian Agent - Selector de Pantalla", options, move |ctx, _frame| {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("🛡️ Selector de Pantalla Local");
-            ui.label("Selecciona qué pantalla deseas exponer al visor remoto:");
-            ui.separator();
+impl GuardianGui {
+    pub fn new(state: Arc<Mutex<AppState>>) -> Self {
+        Self { state }
+    }
+}
 
-            let mut guard = state_gui.lock().unwrap();
-            
-            if guard.pantalla_seleccionada.is_none() {
-                // Clonamos la lista de pantallas para liberar el préstamo inmutable de 'guard' dentro del bucle
-                let pantallas_disponibles = guard.pantallas.clone();
-                let mut pantalla_a_seleccionar = None;
+// 🎯 IMPLEMENTACIÓN ADAPTADA A TU VERSIÓN DE EFRAME (Usa fn ui)
+impl eframe::App for GuardianGui {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Clonamos las variables de control para no retener el lock del Mutex
+        let (estado_actual, mut monitor_idx) = {
+            let state = self.state.lock().unwrap();
+            (state.estado_conexion.clone(), state.pantalla_seleccionada_inicial.clone().unwrap_or_default())
+        };
 
-                egui::ScrollArea::vertical().max_height(140.0).show(ui, |ui| {
-                    for (id, nombre) in pantallas_disponibles {
-                        if ui.button(format!("🖥️ Mandar Pantalla {} ({})", id, nombre)).clicked() {
-                            pantalla_a_seleccionar = Some(id);
-                        }
-                    }
-                });
+        match estado_actual {
+            // 🚨 1. INTERCEPCIÓN POR CONTROL DE ACCESO
+            TipoConexion::SolicitudPendiente { visor_id } => {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(20.0);
+                        ui.heading(
+                            egui::RichText::new("⚠️ SOLICITUD DE CONTROL REMOTO")
+                                .strong()
+                                .color(egui::Color32::from_rgb(255, 165, 0))
+                        );
+                        ui.add_space(10.0);
+                        ui.label(format!("Un visor remoto intenta conectar.\nID: {}", visor_id));
+                        ui.add_space(20.0);
 
-                // Si el usuario hizo clic en una pantalla, mutamos el estado FUERA del bucle
-                if let Some(id) = pantalla_a_seleccionar {
-                    guard.pantalla_seleccionada = Some(id.clone());
-                    guard.logs.push(format!("[AGENTE] Iniciando transmisión de Pantalla {}", id));
-                    
-                    let id_clonado = id.clone();
-                    let state_tokio = Arc::clone(&state_gui);
-                    
-                    // 🚀 Usamos el handle inyectado para saltarnos el secuestro de hilos de egui
-                    tokio_handle.spawn(async move {
-                        if let Err(e) = ejecutar_core_agente(id_clonado, state_tokio).await {
-                            println!("[ERROR CORE]: {:?}", e);
-                        }
+                        ui.group(|ui| {
+                            ui.label("Selecciona el monitor inicial:");
+                            ui.horizontal(|ui| {
+                                if ui.selectable_value(&mut monitor_idx, "2".to_string(), "🖥️ Monitor Principal (2)").changed() {
+                                    let mut state = self.state.lock().unwrap();
+                                    state.pantalla_seleccionada_inicial = Some("2".to_string());
+                                }
+                                if ui.selectable_value(&mut monitor_idx, "3".to_string(), "📺 Monitor Secundario (3)").changed() {
+                                    let mut state = self.state.lock().unwrap();
+                                    state.pantalla_seleccionada_inicial = Some("3".to_string());
+                                }
+                            });
+                        });
+
+                        ui.add_space(25.0);
+
+                        ui.horizontal(|ui| {
+                            if ui.button("✔️ Permitir").clicked() {
+                                let mut state = self.state.lock().unwrap();
+                                if state.pantalla_seleccionada_inicial.is_none() {
+                                    state.pantalla_seleccionada_inicial = Some("2".to_string());
+                                }
+                                state.respuesta_usuario = Some(true);
+                                state.estado_conexion = TipoConexion::Activa;
+                            }
+
+                            if ui.button("❌ Rechazar").clicked() {
+                                let mut state = self.state.lock().unwrap();
+                                state.respuesta_usuario = Some(false);
+                                state.estado_conexion = TipoConexion::Inactiva;
+                            }
+                        });
                     });
-                }
-            } else {
-                // 🟢 SI YA ESTÁ TRANSMITIENDO, ADEMÁS DEL ESTADO AGREGAMOS EL BOTÓN DE CAMBIO DE PANTALLA
-                ui.colored_label(egui::Color32::GREEN, "🟢 Transmitiendo vídeo y control remoto activo...");
-                ui.label(format!("Compartiendo actualmente el índice: {}", guard.pantalla_seleccionada.as_ref().unwrap()));
-                
-                ui.add_space(5.0);
-                
-                // Determinamos cuál es la otra pantalla disponible para ofrecer el intercambio inverso
-                let actual_id = guard.pantalla_seleccionada.as_ref().unwrap().clone();
-                let es_actual_secundaria = actual_id.contains('3') || actual_id.contains('1');
-                
-                let texto_boton = if es_actual_secundaria {
-                    "🔄 Cambiar a Pantalla Principal"
-                } else {
-                    "🔄 Cambiar a Pantalla Secundaria"
-                };
-
-                if ui.button(texto_boton).clicked() {
-                    let cambiar_a_secundaria = !es_actual_secundaria;
-                    
-                    // 1. Notificamos al orquestador en caliente
-                    conmutar_pantalla_caliente(cambiar_a_secundaria);
-                    
-                    // 2. Reflejamos el cambio visualmente en la interfaz actualizando el ID simulado
-                    let nuevo_id = if cambiar_a_secundaria { "3".to_string() } else { "2".to_string() };
-                    guard.pantalla_seleccionada = Some(nuevo_id.clone());
-                    guard.logs.push(format!("[HOT-SWAP] Cambiando transmisión dinámicamente a monitor {}", nuevo_id));
-                }
+                });
             }
 
-            ui.separator();
-            ui.label("Logs del Agente:");
-            // Caja de texto que simula la terminal de estado dentro de la UI
-            egui::ScrollArea::vertical().max_height(100.0).stick_to_bottom(true).show(ui, |ui| {
-                for log in &guard.logs {
-                    ui.small(log);
-                }
-            });
-            
-            // Forzamos el refresco continuo de la UI para actualizar los logs en tiempo real
-            ctx.request_repaint_after(Duration::from_millis(200));
-        });
-    })
+            // 🟢 2. INTERFAZ ESTÁNDAR DE CONTROL Y LOGS
+            _ => {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    ui.heading("Guardian Agent - Panel de Control");
+                    ui.add_space(10.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label("Control de Flujo:");
+                        let state = self.state.lock().unwrap();
+                        if state.estado_conexion == TipoConexion::Activa {
+                            ui.colored_label(egui::Color32::GREEN, "● Transmitiendo en vivo");
+                        } else {
+                            ui.colored_label(egui::Color32::GRAY, "○ Esperando Visor...");
+                        }
+                    });
+
+                    ui.add_space(10.0);
+                    ui.separator();
+
+                    if estado_actual == TipoConexion::Activa {
+                        ui.label("Conmutación en caliente:");
+                        ui.horizontal(|ui| {
+                            if ui.button("Cambiar a Pantalla 1").clicked() {
+                                crate::core::conmutar_pantalla_caliente(false);
+                            }
+                            if ui.button("Cambiar a Pantalla 2").clicked() {
+                                crate::core::conmutar_pantalla_caliente(true);
+                            }
+                        });
+                        ui.add_space(10.0);
+                    }
+
+                    ui.label("Logs del Sistema:");
+                    egui::ScrollArea::vertical().stick_to_bottom(true).show(ui, |ui| {
+                        let state = self.state.lock().unwrap();
+                        for log in &state.logs {
+                            ui.label(log);
+                        }
+                    });
+                });
+            }
+        }
+    }
+}
+
+/// 🚀 Lanzador compatible con la inicialización moderna de tu eframe
+pub fn lanzar_interfaz(state: Arc<Mutex<AppState>>) -> Result<(), eframe::Error> {
+    let native_options = eframe::NativeOptions::default();
+    eframe::run_native(
+        "Guardian Agent",
+        native_options,
+        Box::new(|_cc| Ok(Box::new(GuardianGui::new(state)))),
+    )
 }

@@ -17,12 +17,10 @@ use webrtc::rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_transceiver_
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 
-use crate::gui::AppState;
+use crate::gui::{AppState, TipoConexion};
 use crate::input::mapear_tecla;
 
-// 💡 Estado global para que el hilo de Enigo sepa en tiempo real si aplicar offset al ratón
 static SELECCION_MONITOR_SECUNDARIO: AtomicBool = AtomicBool::new(false);
-// 💡 Canal interno global para notificar el cambio de pantalla al hilo de FFmpeg
 static REINICIAR_FFMPEG_TX: Mutex<Option<tokio::sync::mpsc::Sender<()>>> = Mutex::new(None);
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -50,7 +48,6 @@ struct SignalingMessage {
 #[derive(Deserialize)]
 struct AuthResponse { access_token: String }
 
-/// 🕵️‍♂️ AUTO-DETECCIÓN DINÁMICA DE PANTALLAS PARA PRODUCCIÓN (AVFOUNDATION)
 #[cfg(target_os = "macos")]
 async fn obtener_indices_pantalla_macos() -> Vec<String> {
     let output = Command::new("ffmpeg")
@@ -78,12 +75,8 @@ async fn obtener_indices_pantalla_macos() -> Vec<String> {
     pantallas_detectadas
 }
 
-/// 🚀 FUNCIÓN PÚBLICA PARA QUE LA GUI CAMBIE DE PANTALLA EN CALIENTE
 pub fn conmutar_pantalla_caliente(hacia_secundaria: bool) {
-    // 1. Actualizamos el offset del ratón instantáneamente
     SELECCION_MONITOR_SECUNDARIO.store(hacia_secundaria, Ordering::SeqCst);
-    
-    // 2. Mandamos señal al loop de FFmpeg para que muera y renazca con el nuevo índice
     if let Some(tx) = &*REINICIAR_FFMPEG_TX.lock().unwrap() {
         let tx_clone = tx.clone();
         tokio::spawn(async move {
@@ -106,10 +99,41 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         .json(&serde_json::json!({ "password": password }))
         .send().await?;
 
-    if !auth_res.status().is_success() { return Ok(()); }
+    if !auth_res.status().is_success() { 
+        log("[ERROR] Autenticación fallida en el Backend.", &state);
+        return Ok(()); 
+    }
     let auth_data: AuthResponse = auth_res.json().await?;
     let token = auth_data.access_token;
 
+    log("[AGENTE] Registrado en Backend. Esperando confirmación de interfaz local...", &state);
+    {
+        let mut lock = state.lock().unwrap();
+        lock.estado_conexion = TipoConexion::SolicitudPendiente { visor_id: session_uuid.to_string() };
+    }
+
+    let mut pantalla_inicial_elegida = id_pantalla;
+    loop {
+        let (respondido, aprobado, pantalla) = {
+            let lock = state.lock().unwrap();
+            (lock.respuesta_usuario.is_some(), lock.respuesta_usuario.unwrap_or(false), lock.pantalla_seleccionada_inicial.clone())
+        };
+
+        if respondido {
+            if !aprobado {
+                log("[SISTEMA] Conexión denegada por el usuario local. Abortando flujo.", &state);
+                return Ok(());
+            }
+            if let Some(p) = pantalla {
+                pantalla_inicial_elegida = p;
+            }
+            log("[SISTEMA] Acceso concedido por el usuario local. Acoplando canal de señalización...", &state);
+            break;
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+
+    // Configuración de WebRTC PeerConnection
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
@@ -130,7 +154,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
     let state_dc = Arc::clone(&state);
     
     pc.on_data_channel(Box::new(move |d| {
-        state_dc.lock().unwrap().logs.push(format!("[AGENTE] Canal Abierto por el Visor: {}", d.label()));
+        state_dc.lock().unwrap().logs.push(format!("[AGENTE] Canal de Datos Abierto por Visor: {}", d.label()));
         let tx_clone = tx_on_data_channel.clone();
         Box::pin(async move {
             d.on_message(Box::new(move |msg| {
@@ -157,10 +181,10 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         Box::pin(async {})
     }));
 
-    // Seteamos el estado inicial según lo que seleccionó la GUI al arrancar
-    let arranque_secundaria = id_pantalla.trim().contains('3') || id_pantalla.trim().contains('1');
+    let arranque_secundaria = pantalla_inicial_elegida.trim().contains('3') || pantalla_inicial_elegida.trim().contains('1');
     SELECCION_MONITOR_SECUNDARIO.store(arranque_secundaria, Ordering::SeqCst);
 
+    // Hilo dedicado para simulación de periféricos (Enigo)
     std::thread::spawn(move || {
         let mut enigo = Enigo::new(&Settings::default()).unwrap();
         let (w, h) = enigo.main_display().unwrap_or((1920, 1080));
@@ -172,7 +196,6 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                         let mut real_x = (cmd.x_píxel / cmd.w_nativa) * w as f64;
                         let real_y = (cmd.y_píxel / cmd.h_nativa) * h as f64;
                         
-                        // 💡 Lee dinámicamente el estado atómico modificado por el botón de la GUI
                         if SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst) {
                             real_x += w as f64;
                         }
@@ -227,6 +250,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         Box::pin(async {})
     }));
 
+    // ⚡ Conexión al WebSocket de señalización del Backend (FastAPI)
     let ws_url = format!("ws://{}/api/remote/signaling/{}/agente?token={}", backend_host, session_uuid, token);
     let (ws_stream, _) = connect_async(ws_url).await?;
     let (ws_tx, mut ws_rx) = ws_stream.split();
@@ -253,11 +277,11 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
 
     let track_clone = Arc::clone(&video_track);
     
-    // 💡 Preparamos el canal de reinicios de FFmpeg y lo guardamos en la variable global estática
+    // Canal de control para orquestar los reinicios en caliente de FFmpeg (Hot-Swap)
     let (tx_reiniciar, mut rx_reiniciar) = tokio::sync::mpsc::channel::<()>(10);
     *REINICIAR_FFMPEG_TX.lock().unwrap() = Some(tx_reiniciar);
 
-    // Hilo persistente del socket UDP intermedio que reenvía a WebRTC sin importar los reinicios de FFmpeg
+    // Worker UDP intermedio para inyectar paquetes crudos de FFmpeg al RTP Track de WebRTC
     let track_udp_worker = Arc::clone(&track_clone);
     tokio::spawn(async move {
         let listener = UdpSocket::bind("127.0.0.1:5004").await.unwrap();
@@ -277,7 +301,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         }
     });
 
-    // 💡 OYENTE DINÁMICO DE PROCESOS FFmpeg (Orquestador Hot-Swap de Alto Rendimiento)
+    // Orquestador dinámico de captura FFmpeg (Soporta MacOS y Linux)
     tokio::spawn(async move {
         loop {
             #[cfg(target_os = "macos")]
@@ -299,9 +323,8 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             #[cfg(not(target_os = "macos"))]
             let avf_index = if usar_secundaria { "1".to_string() } else { "0".to_string() };
 
-            println!("[HOT-SWAP] Levantando pipeline FFmpeg real para monitor índice: {}", avf_index);
+            println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor índice: {}", avf_index);
 
-            // ⚡ COMANDO ULTRA-RENDIMIENTO: 60 FPS estables y latencia optimizada para acelerar la conmutación
             #[cfg(target_os = "macos")]
             let ffmpeg_cmd_string = format!(
                 "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 60 -i \"{}\" \
@@ -334,24 +357,24 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                 .spawn()
                 .unwrap();
 
-            // 🎯 Bucle select! con mitigación de procesos zombi
             tokio::select! {
                 _ = rx_reiniciar.recv() => {
-                    println!("[HOT-SWAP] Conmutación solicitada. Forzando terminación de FFmpeg...");
+                    println!("[HOT-SWAP] Conmutación solicitada. Terminando instancia anterior de FFmpeg...");
                     let _ = child.kill().await;
-                    let _ = child.wait().await; // Bloqueamos hasta que el puerto sea totalmente libre
+                    let _ = child.wait().await;
                 }
                 status = child.wait() => {
-                    println!("[HOT-SWAP] FFmpeg finalizó de forma autónoma con estado: {:?}", status);
+                    println!("[HOT-SWAP] FFmpeg finalizó automáticamente con estado: {:?}", status);
                 }
             }
-            
-            // ⏳ Reducido el delay táctico para acelerar la re-instanciación instantánea
             sleep(Duration::from_millis(250)).await; 
         }
     });
 
+    // Escucha de señales entrantes desde el Visor a través del Backend
     let pc_clone = Arc::clone(&pc);
+    let state_disconnect = Arc::clone(&state);
+    
     while let Some(Ok(msg)) = ws_rx.next().await {
         if let Message::Text(text) = msg {
             if let Ok(payload) = serde_json::from_str::<SignalingMessage>(text.as_str()) {
@@ -360,7 +383,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                         let sdp_json_string = serde_json::json!({"type": "answer", "sdp": sdp_data.sdp}).to_string();
                         if let Ok(rd) = serde_json::from_str::<RTCSessionDescription>(&sdp_json_string) {
                             pc_clone.set_remote_description(rd).await?;
-                            log("[AGENTE] Handshake completado con éxito.", &state);
+                            log("[AGENTE] Handshake completado con éxito. Transmitiendo...", &state);
                         }
                     }
                 } else if let Some(ice_data) = payload.ice {
@@ -371,5 +394,14 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             }
         }
     }
+    
+    // 🔴 Si salimos del bucle, significa que el WebSocket del Backend se cerró.
+    // Limpiamos el estado en la GUI.
+    {
+        let mut lock = state_disconnect.lock().unwrap();
+        lock.estado_conexion = TipoConexion::Inactiva;
+        lock.logs.push("[SISTEMA] Canal de señalización cerrado por el servidor remoto.".to_string());
+    }
+    
     Ok(())
 }
