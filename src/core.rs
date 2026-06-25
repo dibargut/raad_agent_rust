@@ -48,6 +48,9 @@ struct SignalingMessage {
 #[derive(Deserialize)]
 struct AuthResponse { access_token: String }
 
+#[derive(Deserialize)]
+struct ControlSignal { action: String, session_uuid: String }
+
 #[cfg(target_os = "macos")]
 async fn obtener_indices_pantalla_macos() -> Vec<String> {
     let output = Command::new("ffmpeg")
@@ -85,6 +88,9 @@ pub fn conmutar_pantalla_caliente(hacia_secundaria: bool) {
     }
 }
 
+// =======================================================================
+// 🔌 FUNCIÓN PRINCIPAL: TÚNEL DE CONTROL PERSISTENTE (IDLE)
+// =======================================================================
 pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let backend_host = "192.168.1.135:8080";
     let password = "TuContrasenaSeguraAqui";
@@ -92,21 +98,122 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
 
     let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
 
-    log("[AGENTE] Solicitando token de acceso via HTTP...", &state);
-    let client = reqwest::Client::new();
-    let auth_res = client
-        .post(format!("http://{}/api/remote/auth/login", backend_host))
-        .json(&serde_json::json!({ "password": password }))
-        .send().await?;
+    loop {
+        log("[TÚNEL] Solicitando token de acceso via HTTP...", &state);
+        let client = reqwest::Client::new();
+        let auth_res_result = client
+            .post(format!("http://{}/api/remote/auth/login", backend_host))
+            .json(&serde_json::json!({ "password": password }))
+            .send().await;
 
-    if !auth_res.status().is_success() { 
-        log("[ERROR] Autenticación fallida en el Backend.", &state);
-        return Ok(()); 
+        let auth_res = match auth_res_result {
+            Ok(res) => res,
+            Err(_) => {
+                log("[SISTEMA] El backend central no responde. Reintentando en 5s...", &state);
+                sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+
+        if !auth_res.status().is_success() { 
+            log("[ERROR] Autenticación rechazada. Reintentando en 5s...", &state);
+            sleep(Duration::from_secs(5)).await;
+            continue; 
+        }
+
+        let auth_data: AuthResponse = auth_res.json().await?;
+        let token = auth_data.access_token;
+
+        let ctrl_ws_url = format!("ws://{}/api/remote/agent/connect/{}?token={}", backend_host, session_uuid, token);
+        log("[TÚNEL] Abriendo canal permanente de control (Idle Mode)...", &state);
+
+        let (ws_stream, _) = match connect_async(ctrl_ws_url).await {
+            Ok(ws) => ws,
+            Err(e) => {
+                log(&format!("[TÚNEL] Error al acoplar socket: {}. Reintentando...", e), &state);
+                sleep(Duration::from_secs(3)).await;
+                continue;
+            }
+        };
+
+        let (ctrl_tx, mut ctrl_rx) = ws_stream.split();
+        log("[TÚNEL] Conectado con éxito. Guardian en línea y listo.", &state);
+        
+        {
+            let mut lock = state.lock().unwrap();
+            lock.estado_conexion = TipoConexion::Inactiva; 
+        }
+
+        // Compartimos el extremo de transmisión del WebSocket de forma asíncrona y segura
+        let ctrl_tx_shared = Arc::new(tokio::sync::Mutex::new(ctrl_tx));
+        let ctrl_tx_hb = Arc::clone(&ctrl_tx_shared);
+        
+        let mut interval = tokio::time::interval(Duration::from_secs(15));
+        let (hb_abort_tx, mut hb_abort_rx) = tokio::sync::oneshot::channel::<()>();
+
+        // 🔄 WORKER SECUNDARIO: HEARTBEATS (Pings constantes al backend)
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let mut tx_lock = ctrl_tx_hb.lock().await;
+                        if tx_lock.send(Message::Text("ping".into())).await.is_err() {
+                            break; 
+                        }
+                    }
+                    _ = &mut hb_abort_rx => {
+                        break; 
+                    }
+                }
+            }
+        });
+
+        // Loop permanente de lectura del túnel de control
+        while let Some(Ok(msg)) = ctrl_rx.next().await {
+            if let Message::Text(text) = msg {
+                if text == "pong" {
+                    continue; 
+                }
+
+                if let Ok(signal) = serde_json::from_str::<ControlSignal>(text.as_str()) {
+                    if signal.action == "despertar" {
+                        log("[TÚNEL] ¡Señal de despertar recibida! Desplegando canal WebRTC...", &state);
+                        
+                        let id_pantalla_clone = id_pantalla.clone();
+                        let state_session = Arc::clone(&state);
+                        let token_session = token.clone();
+                        let backend_host_str = backend_host.to_string();
+                        let session_id_str = signal.session_uuid.clone();
+
+                        tokio::spawn(async move {
+                            if let Err(e) = inicializar_sesion_webrtc(id_pantalla_clone, state_session, token_session, backend_host_str, session_id_str).await {
+                                println!("[ERROR SESIÓN] Fallo crítico en sesión WebRTC: {:?}", e);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        let _ = hb_abort_tx.send(()); 
+        log("[SISTEMA] Conexión de control caída. Re-estabilizando infraestructura en 3s...", &state);
+        sleep(Duration::from_secs(3)).await;
     }
-    let auth_data: AuthResponse = auth_res.json().await?;
-    let token = auth_data.access_token;
+}
 
-    log("[AGENTE] Registrado en Backend. Esperando confirmación de interfaz local...", &state);
+// =======================================================================
+// 📡 FLUJO DE NEGOCIACIÓN WEBRTC INDEPENDIENTE (HANDSHAKE TRAS DESPERTAR)
+// =======================================================================
+async fn inicializar_sesion_webrtc(
+    id_pantalla: String, 
+    state: Arc<Mutex<AppState>>, 
+    token: String,
+    backend_host: String,
+    session_uuid: String
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
+
+    log("[SISTEMA] Levantando pop-up de confirmación en la UI local...", &state);
     {
         let mut lock = state.lock().unwrap();
         lock.estado_conexion = TipoConexion::SolicitudPendiente { visor_id: session_uuid.to_string() };
@@ -121,19 +228,18 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
 
         if respondido {
             if !aprobado {
-                log("[SISTEMA] Conexión denegada por el usuario local. Abortando flujo.", &state);
+                log("[SISTEMA] Conexión rechazada localmente.", &state);
                 return Ok(());
             }
             if let Some(p) = pantalla {
                 pantalla_inicial_elegida = p;
             }
-            log("[SISTEMA] Acceso concedido por el usuario local. Acoplando canal de señalización...", &state);
+            log("[SISTEMA] Permiso concedido. Acoplando al canal de señalización WebRTC...", &state);
             break;
         }
         sleep(Duration::from_millis(200)).await;
     }
 
-    // Configuración de WebRTC PeerConnection
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
@@ -184,7 +290,6 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
     let arranque_secundaria = pantalla_inicial_elegida.trim().contains('3') || pantalla_inicial_elegida.trim().contains('1');
     SELECCION_MONITOR_SECUNDARIO.store(arranque_secundaria, Ordering::SeqCst);
 
-    // Hilo dedicado para simulación de periféricos (Enigo)
     std::thread::spawn(move || {
         let mut enigo = Enigo::new(&Settings::default()).unwrap();
         let (w, h) = enigo.main_display().unwrap_or((1920, 1080));
@@ -199,7 +304,6 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                         if SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst) {
                             real_x += w as f64;
                         }
-
                         let _ = enigo.move_mouse(real_x as i32, real_y as i32, enigo::Coordinate::Abs);
                     }
                 }
@@ -223,9 +327,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                                 let str_char = c.encode_utf8(&mut buffer);
                                 let _ = enigo.text(str_char);
                             }
-                            tecla_especial => {
-                                let _ = enigo.key(tecla_especial, Direction::Press);
-                            }
+                            tecla_especial => { let _ = enigo.key(tecla_especial, Direction::Press); }
                         }
                     }
                 }
@@ -233,9 +335,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                     if let Some(k) = mapear_tecla(&cmd.key) {
                         match k {
                             enigo::Key::Unicode(_) => {}
-                            tecla_especial => {
-                                let _ = enigo.key(tecla_especial, Direction::Release);
-                            }
+                            tecla_especial => { let _ = enigo.key(tecla_especial, Direction::Release); }
                         }
                     }
                 }
@@ -250,7 +350,6 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         Box::pin(async {})
     }));
 
-    // ⚡ Conexión al WebSocket de señalización del Backend (FastAPI)
     let ws_url = format!("ws://{}/api/remote/signaling/{}/agente?token={}", backend_host, session_uuid, token);
     let (ws_stream, _) = connect_async(ws_url).await?;
     let (ws_tx, mut ws_rx) = ws_stream.split();
@@ -276,12 +375,9 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
     log("[AGENTE] Oferta SDP enviada al visor.", &state);
 
     let track_clone = Arc::clone(&video_track);
-    
-    // Canal de control para orquestar los reinicios en caliente de FFmpeg (Hot-Swap)
     let (tx_reiniciar, mut rx_reiniciar) = tokio::sync::mpsc::channel::<()>(10);
     *REINICIAR_FFMPEG_TX.lock().unwrap() = Some(tx_reiniciar);
 
-    // Worker UDP intermedio para inyectar paquetes crudos de FFmpeg al RTP Track de WebRTC
     let track_udp_worker = Arc::clone(&track_clone);
     tokio::spawn(async move {
         let listener = UdpSocket::bind("127.0.0.1:5004").await.unwrap();
@@ -291,9 +387,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                 Ok((n, _)) => { 
                     if n > 0 {
                         let packet_data = inbound_buffer[..n].to_vec();
-                        if track_udp_worker.write(&packet_data).await.is_err() { 
-                            break; 
-                        } 
+                        if track_udp_worker.write(&packet_data).await.is_err() { break; } 
                     }
                 }
                 Err(_) => break,
@@ -301,77 +395,57 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         }
     });
 
-    // Orquestador dinámico de captura FFmpeg (Soporta MacOS y Linux)
     tokio::spawn(async move {
         loop {
             #[cfg(target_os = "macos")]
             let pantallas_detectadas = obtener_indices_pantalla_macos().await;
-
             let usar_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
 
             #[cfg(target_os = "macos")]
-            let avf_index = {
-                if usar_secundaria && pantallas_detectadas.len() > 1 {
-                    pantallas_detectadas[1].clone()
-                } else if !pantallas_detectadas.is_empty() {
-                    pantallas_detectadas[0].clone()
-                } else {
-                    "2".to_string()
-                }
-            };
+            let avf_index = if usar_secundaria && pantallas_detectadas.len() > 1 {
+                pantallas_detectadas[1].clone()
+            } else if !pantallas_detectadas.is_empty() {
+                pantallas_detectadas[0].clone()
+            } else { "2".to_string() };
 
             #[cfg(not(target_os = "macos"))]
             let avf_index = if usar_secundaria { "1".to_string() } else { "0".to_string() };
 
-            println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor índice: {}", avf_index);
+            println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor: {}", avf_index);
 
             #[cfg(target_os = "macos")]
             let ffmpeg_cmd_string = format!(
                 "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 60 -i \"{}\" \
                 -r 60 -vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p\" \
                 -vcodec h264_videotoolbox -realtime 1 -tune zerolatency -bf 0 -profile:v baseline -prio_speed 1 \
-                -b:v 3500k -maxrate 4000k -bufsize 2000k \
-                -g 30 -keyint_min 30 -forced-idr 1 -bsf:v dump_extra -f rtp -payload_type 96 \
-                \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"",
-                avf_index
+                -b:v 3500k -maxrate 4000k -bufsize 2000k -g 30 -keyint_min 30 -forced-idr 1 -bsf:v dump_extra -f rtp -payload_type 96 \
+                \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"", avf_index
             );
 
             #[cfg(target_os = "macos")]
-            let mut child = Command::new("sh")
-                .arg("-c")
-                .arg(&ffmpeg_cmd_string)
-                .stdout(std::process::Stdio::null()) 
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .unwrap();
+            let mut child = Command::new("sh").arg("-c").arg(&ffmpeg_cmd_string)
+                .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
 
             #[cfg(not(target_os = "macos"))]
-            let mut child = Command::new("ffmpeg")
-                .args(&[
+            let mut child = Command::new("ffmpeg").args(&[
                     "-nostdin", "-y", "-f", "x11grab", "-video_size", "1280x720", "-i", &avf_index,
                     "-r", "60", "-c:v", "h264_v4l2m2m", "-b:v", "3M", "-pix_fmt", "yuv420p",
                     "-f", "rtp", "-payload_type", "96", "rtp://127.0.0.1:5004?pkt_size=1200"
-                ])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .unwrap();
+                ]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
 
             tokio::select! {
                 _ = rx_reiniciar.recv() => {
-                    println!("[HOT-SWAP] Conmutación solicitada. Terminando instancia anterior de FFmpeg...");
                     let _ = child.kill().await;
                     let _ = child.wait().await;
                 }
                 status = child.wait() => {
-                    println!("[HOT-SWAP] FFmpeg finalizó automáticamente con estado: {:?}", status);
+                    println!("[HOT-SWAP] FFmpeg finalizó con estado: {:?}", status);
                 }
             }
             sleep(Duration::from_millis(250)).await; 
         }
     });
 
-    // Escucha de señales entrantes desde el Visor a través del Backend
     let pc_clone = Arc::clone(&pc);
     let state_disconnect = Arc::clone(&state);
     
@@ -383,7 +457,11 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                         let sdp_json_string = serde_json::json!({"type": "answer", "sdp": sdp_data.sdp}).to_string();
                         if let Ok(rd) = serde_json::from_str::<RTCSessionDescription>(&sdp_json_string) {
                             pc_clone.set_remote_description(rd).await?;
-                            log("[AGENTE] Handshake completado con éxito. Transmitiendo...", &state);
+                            log("[AGENTE] Handshake WebRTC completado. Streaming activo.", &state);
+                            {
+                                let mut lock = state.lock().unwrap();
+                                lock.estado_conexion = TipoConexion::Activa;
+                            }
                         }
                     }
                 } else if let Some(ice_data) = payload.ice {
@@ -395,13 +473,12 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
         }
     }
     
-    // 🔴 Si salimos del bucle, significa que el WebSocket del Backend se cerró.
-    // Limpiamos el estado en la GUI.
+    log("[SISTEMA] Sesión WebRTC finalizada. El agente regresa a espera activa (Idle).", &state_disconnect);
     {
         let mut lock = state_disconnect.lock().unwrap();
         lock.estado_conexion = TipoConexion::Inactiva;
-        lock.logs.push("[SISTEMA] Canal de señalización cerrado por el servidor remoto.".to_string());
+        lock.respuesta_usuario = None; 
     }
-    
+    let _ = pc.close().await;
     Ok(())
 }

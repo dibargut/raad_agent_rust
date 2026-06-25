@@ -25,3 +25,4 @@ url = "2.5"
 futures-util = "0.3"
 ffmpeg-next = { version = "7.1.0", features = ["ffmpeg4"] }
 eframe = "0.34.3"
+axum = "0.8.9"
