@@ -15,8 +15,8 @@ async fn main() {
     let state_core = Arc::clone(&state);
     
     tokio::spawn(async move {
-        // Aquí pasamos el ID de pantalla por defecto (ej. "2") y el estado compartido
-        if let Err(e) = crate::core::ejecutar_core_agente("2".to_string(), state_core).await {
+        // Pasamos "0" como fallback inicial. La app detectará los monitores reales dinámicamente al despertar.
+        if let Err(e) = crate::core::ejecutar_core_agente("0".to_string(), state_core).await {
             eprintln!("[ERROR CORE] El motor multimedia falló: {:?}", e);
         }
     });

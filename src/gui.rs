@@ -14,6 +14,8 @@ pub struct AppState {
     pub estado_conexion: TipoConexion,
     pub pantalla_seleccionada_inicial: Option<String>,
     pub respuesta_usuario: Option<bool>,
+    // 🖥️ Guardamos las pantallas reales detectadas dinámicamente por el Core
+    pub pantallas_disponibles: Vec<String>,
 }
 
 impl Default for AppState {
@@ -23,6 +25,7 @@ impl Default for AppState {
             estado_conexion: TipoConexion::Inactiva,
             pantalla_seleccionada_inicial: None,
             respuesta_usuario: None,
+            pantallas_disponibles: vec!["0".to_string()], // Por defecto la integrada
         }
     }
 }
@@ -37,13 +40,16 @@ impl GuardianGui {
     }
 }
 
-// 🎯 IMPLEMENTACIÓN ADAPTADA A TU VERSIÓN DE EFRAME (Usa fn ui)
 impl eframe::App for GuardianGui {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Clonamos las variables de control para no retener el lock del Mutex
-        let (estado_actual, mut monitor_idx) = {
+        // Clonamos lo necesario en un bloque rápido para liberar el Mutex de inmediato
+        let (estado_actual, mut monitor_idx, pantallas_reales) = {
             let state = self.state.lock().unwrap();
-            (state.estado_conexion.clone(), state.pantalla_seleccionada_inicial.clone().unwrap_or_default())
+            (
+                state.estado_conexion.clone(),
+                state.pantalla_seleccionada_inicial.clone().unwrap_or_default(),
+                state.pantallas_disponibles.clone(),
+            )
         };
 
         match estado_actual {
@@ -64,13 +70,18 @@ impl eframe::App for GuardianGui {
                         ui.group(|ui| {
                             ui.label("Selecciona el monitor inicial:");
                             ui.horizontal(|ui| {
-                                if ui.selectable_value(&mut monitor_idx, "2".to_string(), "🖥️ Monitor Principal (2)").changed() {
-                                    let mut state = self.state.lock().unwrap();
-                                    state.pantalla_seleccionada_inicial = Some("2".to_string());
-                                }
-                                if ui.selectable_value(&mut monitor_idx, "3".to_string(), "📺 Monitor Secundario (3)").changed() {
-                                    let mut state = self.state.lock().unwrap();
-                                    state.pantalla_seleccionada_inicial = Some("3".to_string());
+                                // 🔄 Renderizado dinámico basado en el hardware real
+                                for (i, idx_pantalla) in pantallas_reales.iter().enumerate() {
+                                    let texto_boton = if i == 0 {
+                                        format!("💻 Monitor Principal ({})", idx_pantalla)
+                                    } else {
+                                        format!("📺 Monitor Secundario ({})", idx_pantalla)
+                                    };
+
+                                    if ui.selectable_value(&mut monitor_idx, idx_pantalla.clone(), &texto_boton).changed() {
+                                        let mut state = self.state.lock().unwrap();
+                                        state.pantalla_seleccionada_inicial = Some(idx_pantalla.clone());
+                                    }
                                 }
                             });
                         });
@@ -80,8 +91,9 @@ impl eframe::App for GuardianGui {
                         ui.horizontal(|ui| {
                             if ui.button("✔️ Permitir").clicked() {
                                 let mut state = self.state.lock().unwrap();
+                                // Si no seleccionó ninguna explícitamente, tomamos la primera disponible
                                 if state.pantalla_seleccionada_inicial.is_none() {
-                                    state.pantalla_seleccionada_inicial = Some("2".to_string());
+                                    state.pantalla_seleccionada_inicial = state.pantallas_disponibles.first().cloned();
                                 }
                                 state.respuesta_usuario = Some(true);
                                 state.estado_conexion = TipoConexion::Activa;
@@ -122,7 +134,8 @@ impl eframe::App for GuardianGui {
                             if ui.button("Cambiar a Pantalla 1").clicked() {
                                 crate::core::conmutar_pantalla_caliente(false);
                             }
-                            if ui.button("Cambiar a Pantalla 2").clicked() {
+                            // Solo mostramos el botón de cambiar a pantalla 2 si realmente hay más de una
+                            if pantallas_reales.len() > 1 && ui.button("Cambiar a Pantalla 2").clicked() {
                                 crate::core::conmutar_pantalla_caliente(true);
                             }
                         });
@@ -142,7 +155,6 @@ impl eframe::App for GuardianGui {
     }
 }
 
-/// 🚀 Lanzador compatible con la inicialización moderna de tu eframe
 pub fn lanzar_interfaz(state: Arc<Mutex<AppState>>) -> Result<(), eframe::Error> {
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(

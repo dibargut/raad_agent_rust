@@ -51,31 +51,103 @@ struct AuthResponse { access_token: String }
 #[derive(Deserialize)]
 struct ControlSignal { action: String, session_uuid: String }
 
+// =======================================================================
+// 🖥️ DETECCIÓN ADAPTATIVA DE PANTALLAS EN MACOS (COMPATIBLE CON DISPLAYLINK)
+// =======================================================================
+
 #[cfg(target_os = "macos")]
-async fn obtener_indices_pantalla_macos() -> Vec<String> {
+#[derive(Debug, Clone)]
+pub struct PantallaReal {
+    pub avf_index: String,
+    pub etiqueta: String,
+}
+
+#[cfg(target_os = "macos")]
+pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
+    // Consultamos directamente a FFmpeg los dispositivos AVFoundation de vídeo
     let output = Command::new("ffmpeg")
         .args(&["-f", "avfoundation", "-list_devices", "true", "-i", ""])
         .output()
         .await;
 
     let mut pantallas_detectadas = Vec::new();
+    let palabras_camara = ["facetime", "webcam", "camera", "iphone", "ipad", "continuity"];
+
     if let Ok(out) = output {
         let stderr_txt = String::from_utf8_lossy(&out.stderr);
-        for line in stderr_txt.lines() {
-            if line.contains("Capture screen") {
+        
+        // Aislamos el bloque de vídeo ignorando los dispositivos de audio
+        let bloque_video = stderr_txt.split("AVFoundation audio devices").next().unwrap_or(&stderr_txt);
+
+        for line in bloque_video.lines() {
+            let linea_lower = line.to_lowercase();
+            
+            // Buscamos flujos que capturen pantallas (incluyendo pantallas DisplayLink/Virtuales)
+            if linea_lower.contains("capture screen") || linea_lower.contains("capture_screen") {
+                // Filtro estricto anti-cámara para evitar falsos positivos
+                if palabras_camara.iter().any(|kw| linea_lower.contains(kw)) {
+                    continue;
+                }
+
                 if let Some(pos_dispositivo) = line.find(']') {
                     let resto_linea = &line[pos_dispositivo + 1..];
                     if let (Some(start), Some(end)) = (resto_linea.find('['), resto_linea.find(']')) {
                         let idx = resto_linea[start + 1..end].trim().to_string();
-                        if !idx.is_empty() {
-                            pantallas_detectadas.push(idx);
+                        if !idx.is_empty() && idx.chars().all(|c| c.is_ascii_digit()) {
+                            // Evitamos duplicados
+                            if !pantallas_detectadas.iter().any(|p: &PantallaReal| p.avf_index == idx) {
+                                pantallas_detectadas.push(PantallaReal {
+                                    avf_index: idx,
+                                    etiqueta: String::new(),
+                                });
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    // Fallback: Si FFmpeg no devolvió nada por un cambio de entorno, usamos el conteo físico de AppleScript
+    if pantallas_detectadas.is_empty() {
+        let output_pantallas = Command::new("osascript")
+            .args(&["-e", "tell application \"Finder\" to get count of screens"])
+            .output()
+            .await;
+
+        let mut conteo = 1;
+        if let Ok(out) = output_pantallas {
+            if let Ok(num) = String::from_utf8_lossy(&out.stdout).trim().parse::<usize>() {
+                conteo = num;
+            }
+        }
+        for i in 0..conteo {
+            pantallas_detectadas.push(PantallaReal {
+                avf_index: i.to_string(),
+                etiqueta: String::new(),
+            });
+        }
+    }
+
+    // Formateamos las etiquetas legibles que se pintarán en el dropdown de la GUI
+    for (i, pantalla) in pantallas_detectadas.iter_mut().enumerate() {
+        pantalla.etiqueta = if i == 0 {
+            format!("Monitor Principal (Pantalla 1 (Laptop)) [AVF idx {}]", pantalla.avf_index)
+        } else {
+            format!("Monitor Externo (Pantalla {}) [AVF idx {}]", i + 1, pantalla.avf_index)
+        };
+    }
+
     pantallas_detectadas
+}
+
+#[cfg(target_os = "macos")]
+pub async fn obtener_indices_pantalla_macos() -> Vec<String> {
+    obtener_pantallas_reales_macos()
+        .await
+        .into_iter()
+        .map(|p| p.avf_index)
+        .collect()
 }
 
 pub fn conmutar_pantalla_caliente(hacia_secundaria: bool) {
@@ -144,14 +216,13 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             lock.estado_conexion = TipoConexion::Inactiva; 
         }
 
-        // Compartimos el extremo de transmisión del WebSocket de forma asíncrona y segura
         let ctrl_tx_shared = Arc::new(tokio::sync::Mutex::new(ctrl_tx));
         let ctrl_tx_hb = Arc::clone(&ctrl_tx_shared);
         
         let mut interval = tokio::time::interval(Duration::from_secs(15));
         let (hb_abort_tx, mut hb_abort_rx) = tokio::sync::oneshot::channel::<()>();
 
-        // 🔄 WORKER SECUNDARIO: HEARTBEATS (Pings constantes al backend)
+        // 🔄 WORKER SECUNDARIO: HEARTBEATS
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -168,7 +239,6 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             }
         });
 
-        // Loop permanente de lectura del túnel de control
         while let Some(Ok(msg)) = ctrl_rx.next().await {
             if let Message::Text(text) = msg {
                 if text == "pong" {
@@ -213,15 +283,33 @@ async fn inicializar_sesion_webrtc(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
 
+    // 🖥️ 1. Detectamos las pantallas reales/DisplayLink disponibles de forma activa
+    #[cfg(target_os = "macos")]
+    let pantallas_reales = obtener_pantallas_reales_macos().await;
+    #[cfg(not(target_os = "macos"))]
+    let pantallas_reales: Vec<String> = vec!["0".to_string()];
+
+    // Mapeamos las opciones legibles para rellenar el dropdown del AppState
+    #[cfg(target_os = "macos")]
+    let opciones_dropdown: Vec<String> = pantallas_reales.iter().map(|p| p.etiqueta.clone()).collect();
+    #[cfg(not(target_os = "macos"))]
+    let opciones_dropdown: Vec<String> = pantallas_reales.clone();
+
     log("[SISTEMA] Levantando pop-up de confirmación en la UI local...", &state);
     {
         let mut lock = state.lock().unwrap();
+        // 🔄 2. Sincronizamos las pantallas encontradas con el dropdown de la interfaz gráfica
+        lock.pantallas_disponibles = opciones_dropdown.clone();
+        if !opciones_dropdown.is_empty() {
+            lock.pantalla_seleccionada_inicial = Some(opciones_dropdown[0].clone());
+        }
         lock.estado_conexion = TipoConexion::SolicitudPendiente { visor_id: session_uuid.to_string() };
     }
 
-    let mut pantalla_inicial_elegida = id_pantalla;
+    let mut index_avf_final = id_pantalla;
+    
     loop {
-        let (respondido, aprobado, pantalla) = {
+        let (respondido, aprobado, etiqueta_seleccionada) = {
             let lock = state.lock().unwrap();
             (lock.respuesta_usuario.is_some(), lock.respuesta_usuario.unwrap_or(false), lock.pantalla_seleccionada_inicial.clone())
         };
@@ -231,14 +319,38 @@ async fn inicializar_sesion_webrtc(
                 log("[SISTEMA] Conexión rechazada localmente.", &state);
                 return Ok(());
             }
-            if let Some(p) = pantalla {
-                pantalla_inicial_elegida = p;
+            
+            // 🔄 3. Traducimos la etiqueta seleccionada por el usuario al índice AVF numérico real
+            #[cfg(target_os = "macos")]
+            if let Some(etiqueta) = etiqueta_seleccionada {
+                if let Some(encontrada) = pantallas_reales.iter().find(|p| p.etiqueta == etiqueta) {
+                    index_avf_final = encontrada.avf_index.clone();
+                }
             }
+            
+            #[cfg(not(target_os = "macos"))]
+            if let Some(p) = etiqueta_seleccionada {
+                index_avf_final = p;
+            }
+
             log("[SISTEMA] Permiso concedido. Acoplando al canal de señalización WebRTC...", &state);
             break;
         }
         sleep(Duration::from_millis(200)).await;
     }
+
+    // Determinamos si es monitor secundario comparando contra el primer índice disponible
+    #[cfg(target_os = "macos")]
+    let arranque_secundaria = if !pantallas_reales.is_empty() {
+        index_avf_final != pantallas_reales[0].avf_index
+    } else {
+        false
+    };
+    
+    #[cfg(not(target_os = "macos"))]
+    let arranque_secundaria = index_avf_final != "0";
+    
+    SELECCION_MONITOR_SECUNDARIO.store(arranque_secundaria, Ordering::SeqCst);
 
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
@@ -286,9 +398,6 @@ async fn inicializar_sesion_webrtc(
         }
         Box::pin(async {})
     }));
-
-    let arranque_secundaria = pantalla_inicial_elegida.trim().contains('3') || pantalla_inicial_elegida.trim().contains('1');
-    SELECCION_MONITOR_SECUNDARIO.store(arranque_secundaria, Ordering::SeqCst);
 
     std::thread::spawn(move || {
         let mut enigo = Enigo::new(&Settings::default()).unwrap();
@@ -395,28 +504,37 @@ async fn inicializar_sesion_webrtc(
         }
     });
 
+    let index_avf_inicial_spawn = index_avf_final.clone();
+
     tokio::spawn(async move {
+        let mut primer_arranque = true;
         loop {
             #[cfg(target_os = "macos")]
-            let pantallas_detectadas = obtener_indices_pantalla_macos().await;
-            let usar_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
-
-            #[cfg(target_os = "macos")]
-            let avf_index = if usar_secundaria && pantallas_detectadas.len() > 1 {
-                pantallas_detectadas[1].clone()
-            } else if !pantallas_detectadas.is_empty() {
-                pantallas_detectadas[0].clone()
-            } else { "2".to_string() };
+            let avf_index = if primer_arranque {
+                index_avf_inicial_spawn.clone()
+            } else {
+                let pantallas = obtener_pantallas_reales_macos().await;
+                let usar_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
+                if usar_secundaria && pantallas.len() > 1 {
+                    pantallas[1].avf_index.clone()
+                } else if !pantallas.is_empty() {
+                    pantallas[0].avf_index.clone()
+                } else {
+                    "0".to_string()
+                }
+            };
 
             #[cfg(not(target_os = "macos"))]
-            let avf_index = if usar_secundaria { "1".to_string() } else { "0".to_string() };
+            let avf_index = if SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst) { "1".to_string() } else { "0".to_string() };
 
-            println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor: {}", avf_index);
+            primer_arranque = false;
+            println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor (AVF Idx): {}", avf_index);
 
+            // Se añade el flag ":none" en el input para deshabilitar explícitamente micrófonos o cámaras secundarias
             #[cfg(target_os = "macos")]
             let ffmpeg_cmd_string = format!(
-                "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 60 -i \"{}\" \
-                -r 60 -vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p\" \
+                "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 30 -i \"{}:none\" \
+                -r 30 -vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p\" \
                 -vcodec h264_videotoolbox -realtime 1 -tune zerolatency -bf 0 -profile:v baseline -prio_speed 1 \
                 -b:v 3500k -maxrate 4000k -bufsize 2000k -g 30 -keyint_min 30 -forced-idr 1 -bsf:v dump_extra -f rtp -payload_type 96 \
                 \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"", avf_index
