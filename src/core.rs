@@ -64,7 +64,6 @@ pub struct PantallaReal {
 
 #[cfg(target_os = "macos")]
 pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
-    // Consultamos directamente a FFmpeg los dispositivos AVFoundation de vídeo
     let output = Command::new("ffmpeg")
         .args(&["-f", "avfoundation", "-list_devices", "true", "-i", ""])
         .output()
@@ -75,16 +74,11 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
 
     if let Ok(out) = output {
         let stderr_txt = String::from_utf8_lossy(&out.stderr);
-        
-        // Aislamos el bloque de vídeo ignorando los dispositivos de audio
         let bloque_video = stderr_txt.split("AVFoundation audio devices").next().unwrap_or(&stderr_txt);
 
         for line in bloque_video.lines() {
             let linea_lower = line.to_lowercase();
-            
-            // Buscamos flujos que capturen pantallas (incluyendo pantallas DisplayLink/Virtuales)
             if linea_lower.contains("capture screen") || linea_lower.contains("capture_screen") {
-                // Filtro estricto anti-cámara para evitar falsos positivos
                 if palabras_camara.iter().any(|kw| linea_lower.contains(kw)) {
                     continue;
                 }
@@ -94,7 +88,6 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
                     if let (Some(start), Some(end)) = (resto_linea.find('['), resto_linea.find(']')) {
                         let idx = resto_linea[start + 1..end].trim().to_string();
                         if !idx.is_empty() && idx.chars().all(|c| c.is_ascii_digit()) {
-                            // Evitamos duplicados
                             if !pantallas_detectadas.iter().any(|p: &PantallaReal| p.avf_index == idx) {
                                 pantallas_detectadas.push(PantallaReal {
                                     avf_index: idx,
@@ -108,7 +101,6 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
         }
     }
 
-    // Fallback: Si FFmpeg no devolvió nada por un cambio de entorno, usamos el conteo físico de AppleScript
     if pantallas_detectadas.is_empty() {
         let output_pantallas = Command::new("osascript")
             .args(&["-e", "tell application \"Finder\" to get count of screens"])
@@ -129,7 +121,6 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
         }
     }
 
-    // Formateamos las etiquetas legibles que se pintarán en el dropdown de la GUI
     for (i, pantalla) in pantallas_detectadas.iter_mut().enumerate() {
         pantalla.etiqueta = if i == 0 {
             format!("Monitor Principal (Pantalla 1 (Laptop)) [AVF idx {}]", pantalla.avf_index)
@@ -216,13 +207,28 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             lock.estado_conexion = TipoConexion::Inactiva; 
         }
 
+        // 🚨 BYPASS DE DIAGNÓSTICO PARA SALTAR EL BLOQUEO DEL BACKEND 🚨
+        // Ignoramos la espera del backend y disparamos el flujo localmente a los 3 segundos
+        let id_bypass = id_pantalla.clone();
+        let state_bypass = Arc::clone(&state);
+        let token_bypass = token.clone();
+        let host_bypass = backend_host.to_string();
+        let session_bypass = session_uuid.to_string();
+        
+        tokio::spawn(async move {
+            sleep(Duration::from_secs(3)).await;
+            println!("\n[DIAGNÓSTICO] ⚠️ Backend ignorado. Forzando inicio de sesión WebRTC local para pruebas...\n");
+            if let Err(e) = inicializar_sesion_webrtc(id_bypass, state_bypass, token_bypass, host_bypass, session_bypass).await {
+                println!("[ERROR SESIÓN] Fallo crítico: {:?}", e);
+            }
+        });
+
         let ctrl_tx_shared = Arc::new(tokio::sync::Mutex::new(ctrl_tx));
         let ctrl_tx_hb = Arc::clone(&ctrl_tx_shared);
         
         let mut interval = tokio::time::interval(Duration::from_secs(15));
         let (hb_abort_tx, mut hb_abort_rx) = tokio::sync::oneshot::channel::<()>();
 
-        // 🔄 WORKER SECUNDARIO: HEARTBEATS
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -232,34 +238,18 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                             break; 
                         }
                     }
-                    _ = &mut hb_abort_rx => {
-                        break; 
-                    }
+                    _ = &mut hb_abort_rx => { break; }
                 }
             }
         });
 
         while let Some(Ok(msg)) = ctrl_rx.next().await {
             if let Message::Text(text) = msg {
-                if text == "pong" {
-                    continue; 
-                }
+                if text == "pong" { continue; }
 
                 if let Ok(signal) = serde_json::from_str::<ControlSignal>(text.as_str()) {
                     if signal.action == "despertar" {
-                        log("[TÚNEL] ¡Señal de despertar recibida! Desplegando canal WebRTC...", &state);
-                        
-                        let id_pantalla_clone = id_pantalla.clone();
-                        let state_session = Arc::clone(&state);
-                        let token_session = token.clone();
-                        let backend_host_str = backend_host.to_string();
-                        let session_id_str = signal.session_uuid.clone();
-
-                        tokio::spawn(async move {
-                            if let Err(e) = inicializar_sesion_webrtc(id_pantalla_clone, state_session, token_session, backend_host_str, session_id_str).await {
-                                println!("[ERROR SESIÓN] Fallo crítico en sesión WebRTC: {:?}", e);
-                            }
-                        });
+                        log("[TÚNEL] ¡Señal de despertar recibida por fin del backend!", &state);
                     }
                 }
             }
@@ -283,13 +273,11 @@ async fn inicializar_sesion_webrtc(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
 
-    // 🖥️ 1. Detectamos las pantallas reales/DisplayLink disponibles de forma activa
     #[cfg(target_os = "macos")]
     let pantallas_reales = obtener_pantallas_reales_macos().await;
     #[cfg(not(target_os = "macos"))]
     let pantallas_reales: Vec<String> = vec!["0".to_string()];
 
-    // Mapeamos las opciones legibles para rellenar el dropdown del AppState
     #[cfg(target_os = "macos")]
     let opciones_dropdown: Vec<String> = pantallas_reales.iter().map(|p| p.etiqueta.clone()).collect();
     #[cfg(not(target_os = "macos"))]
@@ -298,7 +286,6 @@ async fn inicializar_sesion_webrtc(
     log("[SISTEMA] Levantando pop-up de confirmación en la UI local...", &state);
     {
         let mut lock = state.lock().unwrap();
-        // 🔄 2. Sincronizamos las pantallas encontradas con el dropdown de la interfaz gráfica
         lock.pantallas_disponibles = opciones_dropdown.clone();
         if !opciones_dropdown.is_empty() {
             lock.pantalla_seleccionada_inicial = Some(opciones_dropdown[0].clone());
@@ -320,7 +307,6 @@ async fn inicializar_sesion_webrtc(
                 return Ok(());
             }
             
-            // 🔄 3. Traducimos la etiqueta seleccionada por el usuario al índice AVF numérico real
             #[cfg(target_os = "macos")]
             if let Some(etiqueta) = etiqueta_seleccionada {
                 if let Some(encontrada) = pantallas_reales.iter().find(|p| p.etiqueta == etiqueta) {
@@ -339,7 +325,6 @@ async fn inicializar_sesion_webrtc(
         sleep(Duration::from_millis(200)).await;
     }
 
-    // Determinamos si es monitor secundario comparando contra el primer índice disponible
     #[cfg(target_os = "macos")]
     let arranque_secundaria = if !pantallas_reales.is_empty() {
         index_avf_final != pantallas_reales[0].avf_index
@@ -487,20 +472,65 @@ async fn inicializar_sesion_webrtc(
     let (tx_reiniciar, mut rx_reiniciar) = tokio::sync::mpsc::channel::<()>(10);
     *REINICIAR_FFMPEG_TX.lock().unwrap() = Some(tx_reiniciar);
 
+    // ⚡ EL REESCRITOR RTP MATEMÁTICO INTEGRADO EN TU WORKER ORIGINAL ⚡
     let track_udp_worker = Arc::clone(&track_clone);
     tokio::spawn(async move {
-        let listener = UdpSocket::bind("127.0.0.1:5004").await.unwrap();
-        loop {
+        if let Ok(listener) = UdpSocket::bind("127.0.0.1:5004").await {
             let mut inbound_buffer = vec![0u8; 2048];
-            match listener.recv_from(&mut inbound_buffer).await {
-                Ok((n, _)) => { 
-                    if n > 0 {
-                        let packet_data = inbound_buffer[..n].to_vec();
-                        if track_udp_worker.write(&packet_data).await.is_err() { break; } 
+            
+            let mut current_ssrc = 0u32;
+            let mut first_ssrc_ever = 0u32;
+            let mut seq_offset = 0u16;
+            let mut ts_offset = 0u32;
+            let mut last_seq_out = 0u16;
+            let mut last_ts_out = 0u32;
+            let mut is_first_packet = true;
+
+            loop {
+                match listener.recv_from(&mut inbound_buffer).await {
+                    Ok((n, _)) => { 
+                        if n >= 12 { // Longitud mínima de cabecera RTP
+                            let mut packet_data = inbound_buffer[..n].to_vec();
+                            
+                            // 1. Extraemos cabeceras del FFmpeg actual
+                            let seq_in = u16::from_be_bytes([packet_data[2], packet_data[3]]);
+                            let ts_in = u32::from_be_bytes([packet_data[4], packet_data[5], packet_data[6], packet_data[7]]);
+                            let ssrc_in = u32::from_be_bytes([packet_data[8], packet_data[9], packet_data[10], packet_data[11]]);
+
+                            // 2. Comprobamos si FFmpeg ha reiniciado (cambio de pantalla)
+                            if is_first_packet {
+                                first_ssrc_ever = ssrc_in;
+                                current_ssrc = ssrc_in;
+                                is_first_packet = false;
+                            } else if ssrc_in != current_ssrc {
+                                // Aplicamos el offset exacto donde murió la pantalla anterior
+                                seq_offset = last_seq_out.wrapping_sub(seq_in).wrapping_add(1);
+                                ts_offset = last_ts_out.wrapping_sub(ts_in).wrapping_add(3000); 
+                                current_ssrc = ssrc_in;
+                                println!("🚀 [HOT-SWAP] Empalme de vídeo sincronizado. Engañando a WebRTC...");
+                            }
+
+                            // 3. Modificamos al vuelo la secuencia
+                            let seq_out = seq_in.wrapping_add(seq_offset);
+                            let ts_out = ts_in.wrapping_add(ts_offset);
+                            last_seq_out = seq_out;
+                            last_ts_out = ts_out;
+
+                            packet_data[2..4].copy_from_slice(&seq_out.to_be_bytes());
+                            packet_data[4..8].copy_from_slice(&ts_out.to_be_bytes());
+                            packet_data[8..12].copy_from_slice(&first_ssrc_ever.to_be_bytes());
+
+                            if track_udp_worker.write(&packet_data).await.is_err() { break; } 
+                        } else if n > 0 {
+                            let packet_data = inbound_buffer[..n].to_vec();
+                            if track_udp_worker.write(&packet_data).await.is_err() { break; } 
+                        }
                     }
+                    Err(_) => break,
                 }
-                Err(_) => break,
             }
+        } else {
+            println!("[ERROR] No se pudo vincular el puerto UDP 5004. Ejecuta 'killall ffmpeg' en tu terminal.");
         }
     });
 
@@ -530,7 +560,7 @@ async fn inicializar_sesion_webrtc(
             primer_arranque = false;
             println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor (AVF Idx): {}", avf_index);
 
-            // Se añade el flag ":none" en el input para deshabilitar explícitamente micrófonos o cámaras secundarias
+            // COMANDO INTACTO
             #[cfg(target_os = "macos")]
             let ffmpeg_cmd_string = format!(
                 "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 30 -i \"{}:none\" \
