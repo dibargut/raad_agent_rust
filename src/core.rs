@@ -48,8 +48,12 @@ struct SignalingMessage {
 #[derive(Deserialize)]
 struct AuthResponse { access_token: String }
 
-#[derive(Deserialize)]
-struct ControlSignal { action: String, session_uuid: String }
+// 🛡️ BLINDAJE: Tolerante a fallos si el backend omite campos
+#[derive(Deserialize, Debug)]
+struct ControlSignal { 
+    action: String, 
+    session_uuid: Option<String> 
+}
 
 // =======================================================================
 // 🖥️ DETECCIÓN ADAPTATIVA DE PANTALLAS EN MACOS (COMPATIBLE CON DISPLAYLINK)
@@ -78,6 +82,7 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
 
         for line in bloque_video.lines() {
             let linea_lower = line.to_lowercase();
+            
             if linea_lower.contains("capture screen") || linea_lower.contains("capture_screen") {
                 if palabras_camara.iter().any(|kw| linea_lower.contains(kw)) {
                     continue;
@@ -207,22 +212,6 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             lock.estado_conexion = TipoConexion::Inactiva; 
         }
 
-        // 🚨 BYPASS DE DIAGNÓSTICO PARA SALTAR EL BLOQUEO DEL BACKEND 🚨
-        // Ignoramos la espera del backend y disparamos el flujo localmente a los 3 segundos
-        let id_bypass = id_pantalla.clone();
-        let state_bypass = Arc::clone(&state);
-        let token_bypass = token.clone();
-        let host_bypass = backend_host.to_string();
-        let session_bypass = session_uuid.to_string();
-        
-        tokio::spawn(async move {
-            sleep(Duration::from_secs(3)).await;
-            println!("\n[DIAGNÓSTICO] ⚠️ Backend ignorado. Forzando inicio de sesión WebRTC local para pruebas...\n");
-            if let Err(e) = inicializar_sesion_webrtc(id_bypass, state_bypass, token_bypass, host_bypass, session_bypass).await {
-                println!("[ERROR SESIÓN] Fallo crítico: {:?}", e);
-            }
-        });
-
         let ctrl_tx_shared = Arc::new(tokio::sync::Mutex::new(ctrl_tx));
         let ctrl_tx_hb = Arc::clone(&ctrl_tx_shared);
         
@@ -238,19 +227,47 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                             break; 
                         }
                     }
-                    _ = &mut hb_abort_rx => { break; }
+                    _ = &mut hb_abort_rx => {
+                        break; 
+                    }
                 }
             }
         });
 
+        // 🛡️ BUCLE DE LECTURA ANTI-CRASHES Y UNIVERSAL
         while let Some(Ok(msg)) = ctrl_rx.next().await {
-            if let Message::Text(text) = msg {
-                if text == "pong" { continue; }
+            let texto_recibido = match msg {
+                Message::Text(t) => t.to_string(),
+                Message::Binary(b) => String::from_utf8_lossy(&b).to_string(), // Inmune a versiones de tokio-tungstenite
+                _ => continue,
+            };
 
-                if let Ok(signal) = serde_json::from_str::<ControlSignal>(text.as_str()) {
+            if texto_recibido == "pong" {
+                continue; 
+            }
+
+            println!("\n[WS RAW IN] Tráfico del backend interceptado: {}", texto_recibido);
+
+            match serde_json::from_str::<ControlSignal>(&texto_recibido) {
+                Ok(signal) => {
                     if signal.action == "despertar" {
-                        log("[TÚNEL] ¡Señal de despertar recibida por fin del backend!", &state);
+                        log("[TÚNEL] ¡Señal de despertar recibida! Desplegando canal WebRTC...", &state);
+                        
+                        let id_pantalla_clone = id_pantalla.clone();
+                        let state_session = Arc::clone(&state);
+                        let token_session = token.clone();
+                        let backend_host_str = backend_host.to_string();
+                        let session_id_str = signal.session_uuid.unwrap_or_else(|| session_uuid.to_string());
+
+                        tokio::spawn(async move {
+                            if let Err(e) = inicializar_sesion_webrtc(id_pantalla_clone, state_session, token_session, backend_host_str, session_id_str).await {
+                                println!("[ERROR SESIÓN] Fallo crítico en sesión WebRTC: {:?}", e);
+                            }
+                        });
                     }
+                }
+                Err(e) => {
+                    println!("🚨 [JSON ERROR] Error de parseo: {:?}. El JSON recibido fue: {}", e, texto_recibido);
                 }
             }
         }
@@ -386,16 +403,29 @@ async fn inicializar_sesion_webrtc(
 
     std::thread::spawn(move || {
         let mut enigo = Enigo::new(&Settings::default()).unwrap();
-        let (w, h) = enigo.main_display().unwrap_or((1920, 1080));
+        let (mut w, mut h) = enigo.main_display().unwrap_or((1920, 1080));
+        let mut ultima_seleccion_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
 
         while let Some(cmd) = rx_control.blocking_recv() {
+            let modo_actual_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
+            if modo_actual_secundaria != ultima_seleccion_secundaria {
+                if let Ok(nueva_enigo) = Enigo::new(&Settings::default()) {
+                    enigo = nueva_enigo;
+                    if let Ok(dim) = enigo.main_display() {
+                        w = dim.0;
+                        h = dim.1;
+                    }
+                }
+                ultima_seleccion_secundaria = modo_actual_secundaria;
+            }
+
             match cmd.event.as_str() {
                 "mouse_move" => {
                     if cmd.w_nativa > 0.0 && cmd.h_nativa > 0.0 {
                         let mut real_x = (cmd.x_píxel / cmd.w_nativa) * w as f64;
                         let real_y = (cmd.y_píxel / cmd.h_nativa) * h as f64;
                         
-                        if SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst) {
+                        if modo_actual_secundaria {
                             real_x += w as f64;
                         }
                         let _ = enigo.move_mouse(real_x as i32, real_y as i32, enigo::Coordinate::Abs);
@@ -497,7 +527,7 @@ async fn inicializar_sesion_webrtc(
                             let ts_in = u32::from_be_bytes([packet_data[4], packet_data[5], packet_data[6], packet_data[7]]);
                             let ssrc_in = u32::from_be_bytes([packet_data[8], packet_data[9], packet_data[10], packet_data[11]]);
 
-                            // 2. Comprobamos si FFmpeg ha reiniciado (cambio de pantalla)
+                            // 2. Comprobamos si FFmpeg ha reiniciado
                             if is_first_packet {
                                 first_ssrc_ever = ssrc_in;
                                 current_ssrc = ssrc_in;
@@ -530,7 +560,7 @@ async fn inicializar_sesion_webrtc(
                 }
             }
         } else {
-            println!("[ERROR] No se pudo vincular el puerto UDP 5004. Ejecuta 'killall ffmpeg' en tu terminal.");
+            println!("[ERROR] No se pudo vincular el puerto UDP 5004. Asegúrate de matar procesos ffmpeg previos.");
         }
     });
 
@@ -560,7 +590,7 @@ async fn inicializar_sesion_webrtc(
             primer_arranque = false;
             println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor (AVF Idx): {}", avf_index);
 
-            // COMANDO INTACTO
+            // COMANDO ORIGINAL DE FFMPEG INTACTO
             #[cfg(target_os = "macos")]
             let ffmpeg_cmd_string = format!(
                 "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 30 -i \"{}:none\" \
