@@ -16,6 +16,7 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::{rtp_codec::RTCRtpCodecCapability, rtp_transceiver_direction::RTCRtpTransceiverDirection};
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
 use crate::gui::{AppState, TipoConexion};
 use crate::input::mapear_tecla;
@@ -48,7 +49,6 @@ struct SignalingMessage {
 #[derive(Deserialize)]
 struct AuthResponse { access_token: String }
 
-// 🛡️ BLINDAJE: Tolerante a fallos si el backend omite campos
 #[derive(Deserialize, Debug)]
 struct ControlSignal { 
     action: String, 
@@ -234,19 +234,15 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
             }
         });
 
-        // 🛡️ BUCLE DE LECTURA ANTI-CRASHES Y UNIVERSAL
+        // Tolerancia a fallos: leemos como String tanto tramas de Texto como Binarias
         while let Some(Ok(msg)) = ctrl_rx.next().await {
             let texto_recibido = match msg {
                 Message::Text(t) => t.to_string(),
-                Message::Binary(b) => String::from_utf8_lossy(&b).to_string(), // Inmune a versiones de tokio-tungstenite
+                Message::Binary(b) => String::from_utf8_lossy(&b).to_string(),
                 _ => continue,
             };
 
-            if texto_recibido == "pong" {
-                continue; 
-            }
-
-            println!("\n[WS RAW IN] Tráfico del backend interceptado: {}", texto_recibido);
+            if texto_recibido == "pong" { continue; }
 
             match serde_json::from_str::<ControlSignal>(&texto_recibido) {
                 Ok(signal) => {
@@ -267,7 +263,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                     }
                 }
                 Err(e) => {
-                    println!("🚨 [JSON ERROR] Error de parseo: {:?}. El JSON recibido fue: {}", e, texto_recibido);
+                    println!("🚨 [JSON ERROR] Error de parseo: {:?}", e);
                 }
             }
         }
@@ -401,12 +397,22 @@ async fn inicializar_sesion_webrtc(
         Box::pin(async {})
     }));
 
+    // 🔥 1. CANAL DE CIERRE GLOBAL: Emite un broadcast para liquidar hilos al instante
+    let (tx_kill_workers, _) = tokio::sync::broadcast::channel::<()>(1);
+    
+    let mut rx_kill_mouse = tx_kill_workers.subscribe();
     std::thread::spawn(move || {
-        let mut enigo = Enigo::new(&Settings::default()).unwrap();
+        let mut enigo = match Enigo::new(&Settings::default()) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
         let (mut w, mut h) = enigo.main_display().unwrap_or((1920, 1080));
         let mut ultima_seleccion_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
 
         while let Some(cmd) = rx_control.blocking_recv() {
+            // Abortamos de inmediato si la sesión se corta
+            if rx_kill_mouse.try_recv().is_ok() { break; } 
+
             let modo_actual_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
             if modo_actual_secundaria != ultima_seleccion_secundaria {
                 if let Ok(nueva_enigo) = Enigo::new(&Settings::default()) {
@@ -424,10 +430,7 @@ async fn inicializar_sesion_webrtc(
                     if cmd.w_nativa > 0.0 && cmd.h_nativa > 0.0 {
                         let mut real_x = (cmd.x_píxel / cmd.w_nativa) * w as f64;
                         let real_y = (cmd.y_píxel / cmd.h_nativa) * h as f64;
-                        
-                        if modo_actual_secundaria {
-                            real_x += w as f64;
-                        }
+                        if modo_actual_secundaria { real_x += w as f64; }
                         let _ = enigo.move_mouse(real_x as i32, real_y as i32, enigo::Coordinate::Abs);
                     }
                 }
@@ -469,8 +472,17 @@ async fn inicializar_sesion_webrtc(
     });
 
     let state_wrtc = Arc::clone(&state);
-    pc.on_peer_connection_state_change(Box::new(move |state| {
-        state_wrtc.lock().unwrap().logs.push(format!("[WEBRTC] Estado: {}", state));
+    
+    // 🔥 2. DETECTOR DE MUERTE: Observamos el PeerConnection para saber si el visor cerró el navegador
+    let (tx_end_session, mut rx_end_session) = tokio::sync::mpsc::channel::<()>(1);
+    let tx_end_clone = tx_end_session.clone();
+    
+    pc.on_peer_connection_state_change(Box::new(move |estado_webrtc| {
+        state_wrtc.lock().unwrap().logs.push(format!("[WEBRTC] Estado: {}", estado_webrtc));
+        
+        if estado_webrtc == RTCPeerConnectionState::Failed || estado_webrtc == RTCPeerConnectionState::Disconnected || estado_webrtc == RTCPeerConnectionState::Closed {
+            let _ = tx_end_clone.try_send(());
+        }
         Box::pin(async {})
     }));
 
@@ -502,12 +514,13 @@ async fn inicializar_sesion_webrtc(
     let (tx_reiniciar, mut rx_reiniciar) = tokio::sync::mpsc::channel::<()>(10);
     *REINICIAR_FFMPEG_TX.lock().unwrap() = Some(tx_reiniciar);
 
-    // ⚡ EL REESCRITOR RTP MATEMÁTICO INTEGRADO EN TU WORKER ORIGINAL ⚡
+    // ⚡ EL REESCRITOR RTP MATEMÁTICO INTEGRADO (Cierra el puerto 5004 cuando la sesión termina)
     let track_udp_worker = Arc::clone(&track_clone);
+    let mut rx_kill_udp = tx_kill_workers.subscribe();
+    
     tokio::spawn(async move {
         if let Ok(listener) = UdpSocket::bind("127.0.0.1:5004").await {
             let mut inbound_buffer = vec![0u8; 2048];
-            
             let mut current_ssrc = 0u32;
             let mut first_ssrc_ever = 0u32;
             let mut seq_offset = 0u16;
@@ -517,54 +530,51 @@ async fn inicializar_sesion_webrtc(
             let mut is_first_packet = true;
 
             loop {
-                match listener.recv_from(&mut inbound_buffer).await {
-                    Ok((n, _)) => { 
-                        if n >= 12 { // Longitud mínima de cabecera RTP
-                            let mut packet_data = inbound_buffer[..n].to_vec();
-                            
-                            // 1. Extraemos cabeceras del FFmpeg actual
-                            let seq_in = u16::from_be_bytes([packet_data[2], packet_data[3]]);
-                            let ts_in = u32::from_be_bytes([packet_data[4], packet_data[5], packet_data[6], packet_data[7]]);
-                            let ssrc_in = u32::from_be_bytes([packet_data[8], packet_data[9], packet_data[10], packet_data[11]]);
+                tokio::select! {
+                    _ = rx_kill_udp.recv() => { break; } // Sale del bucle, destruyendo el Socket y liberando el puerto
+                    res = listener.recv_from(&mut inbound_buffer) => {
+                        if let Ok((n, _)) = res {
+                            if n >= 12 { 
+                                let mut packet_data = inbound_buffer[..n].to_vec();
+                                let seq_in = u16::from_be_bytes([packet_data[2], packet_data[3]]);
+                                let ts_in = u32::from_be_bytes([packet_data[4], packet_data[5], packet_data[6], packet_data[7]]);
+                                let ssrc_in = u32::from_be_bytes([packet_data[8], packet_data[9], packet_data[10], packet_data[11]]);
 
-                            // 2. Comprobamos si FFmpeg ha reiniciado
-                            if is_first_packet {
-                                first_ssrc_ever = ssrc_in;
-                                current_ssrc = ssrc_in;
-                                is_first_packet = false;
-                            } else if ssrc_in != current_ssrc {
-                                // Aplicamos el offset exacto donde murió la pantalla anterior
-                                seq_offset = last_seq_out.wrapping_sub(seq_in).wrapping_add(1);
-                                ts_offset = last_ts_out.wrapping_sub(ts_in).wrapping_add(3000); 
-                                current_ssrc = ssrc_in;
-                                println!("🚀 [HOT-SWAP] Empalme de vídeo sincronizado. Engañando a WebRTC...");
+                                if is_first_packet {
+                                    first_ssrc_ever = ssrc_in;
+                                    current_ssrc = ssrc_in;
+                                    is_first_packet = false;
+                                } else if ssrc_in != current_ssrc {
+                                    seq_offset = last_seq_out.wrapping_sub(seq_in).wrapping_add(1);
+                                    ts_offset = last_ts_out.wrapping_sub(ts_in).wrapping_add(3000); 
+                                    current_ssrc = ssrc_in;
+                                }
+
+                                let seq_out = seq_in.wrapping_add(seq_offset);
+                                let ts_out = ts_in.wrapping_add(ts_offset);
+                                last_seq_out = seq_out;
+                                last_ts_out = ts_out;
+
+                                packet_data[2..4].copy_from_slice(&seq_out.to_be_bytes());
+                                packet_data[4..8].copy_from_slice(&ts_out.to_be_bytes());
+                                packet_data[8..12].copy_from_slice(&first_ssrc_ever.to_be_bytes());
+
+                                if track_udp_worker.write(&packet_data).await.is_err() { break; } 
+                            } else if n > 0 {
+                                let packet_data = inbound_buffer[..n].to_vec();
+                                if track_udp_worker.write(&packet_data).await.is_err() { break; } 
                             }
-
-                            // 3. Modificamos al vuelo la secuencia
-                            let seq_out = seq_in.wrapping_add(seq_offset);
-                            let ts_out = ts_in.wrapping_add(ts_offset);
-                            last_seq_out = seq_out;
-                            last_ts_out = ts_out;
-
-                            packet_data[2..4].copy_from_slice(&seq_out.to_be_bytes());
-                            packet_data[4..8].copy_from_slice(&ts_out.to_be_bytes());
-                            packet_data[8..12].copy_from_slice(&first_ssrc_ever.to_be_bytes());
-
-                            if track_udp_worker.write(&packet_data).await.is_err() { break; } 
-                        } else if n > 0 {
-                            let packet_data = inbound_buffer[..n].to_vec();
-                            if track_udp_worker.write(&packet_data).await.is_err() { break; } 
+                        } else {
+                            break;
                         }
                     }
-                    Err(_) => break,
                 }
             }
-        } else {
-            println!("[ERROR] No se pudo vincular el puerto UDP 5004. Asegúrate de matar procesos ffmpeg previos.");
         }
     });
 
     let index_avf_inicial_spawn = index_avf_final.clone();
+    let mut rx_kill_ffmpeg = tx_kill_workers.subscribe();
 
     tokio::spawn(async move {
         let mut primer_arranque = true;
@@ -588,36 +598,56 @@ async fn inicializar_sesion_webrtc(
             let avf_index = if SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst) { "1".to_string() } else { "0".to_string() };
 
             primer_arranque = false;
-            println!("[HOT-SWAP] Levantando pipeline FFmpeg para monitor (AVF Idx): {}", avf_index);
 
-            // COMANDO ORIGINAL DE FFMPEG INTACTO
+            // 🔥 3. PARCHE ANTIZOMBIS: Ejecutamos FFMPEG directo. Nunca usamos `sh -c` para que `child.kill()`
+            // aniquile el proceso de captura real y no se quede huérfano en macOS.
             #[cfg(target_os = "macos")]
-            let ffmpeg_cmd_string = format!(
-                "ffmpeg -nostdin -y -f avfoundation -capture_cursor 1 -pixel_format nv12 -framerate 30 -i \"{}:none\" \
-                -r 30 -vf \"scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p\" \
-                -vcodec h264_videotoolbox -realtime 1 -tune zerolatency -bf 0 -profile:v baseline -prio_speed 1 \
-                -b:v 3500k -maxrate 4000k -bufsize 2000k -g 30 -keyint_min 30 -forced-idr 1 -bsf:v dump_extra -f rtp -payload_type 96 \
-                \"rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760\"", avf_index
-            );
-
+            let input_arg = format!("{}:none", avf_index);
+            
             #[cfg(target_os = "macos")]
-            let mut child = Command::new("sh").arg("-c").arg(&ffmpeg_cmd_string)
-                .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
+            let mut child = Command::new("ffmpeg")
+                .args(&[
+                    "-nostdin", "-y", "-f", "avfoundation", "-capture_cursor", "1",
+                    "-pixel_format", "nv12", "-framerate", "30", "-i", &input_arg,
+                    "-r", "30",
+                    "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p",
+                    "-vcodec", "h264_videotoolbox", "-realtime", "1", "-tune", "zerolatency",
+                    "-bf", "0", "-profile:v", "baseline", "-prio_speed", "1",
+                    "-b:v", "3500k", "-maxrate", "4000k", "-bufsize", "2000k",
+                    "-g", "30", "-keyint_min", "30", "-forced-idr", "1",
+                    "-bsf:v", "dump_extra", "-f", "rtp", "-payload_type", "96",
+                    "rtp://127.0.0.1:5004?pkt_size=1200&buffer_size=10485760"
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn().unwrap();
 
             #[cfg(not(target_os = "macos"))]
-            let mut child = Command::new("ffmpeg").args(&[
+            let mut child = Command::new("ffmpeg")
+                .args(&[
                     "-nostdin", "-y", "-f", "x11grab", "-video_size", "1280x720", "-i", &avf_index,
                     "-r", "60", "-c:v", "h264_v4l2m2m", "-b:v", "3M", "-pix_fmt", "yuv420p",
                     "-f", "rtp", "-payload_type", "96", "rtp://127.0.0.1:5004?pkt_size=1200"
-                ]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn().unwrap();
 
             tokio::select! {
-                _ = rx_reiniciar.recv() => {
+                _ = rx_kill_ffmpeg.recv() => { 
+                    // ☠️ Al cerrar la sesión, mandamos SIGKILL a ffmpeg directo y esperamos su muerte
+                    println!("[SISTEMA] Cerrando proceso FFmpeg de forma segura...");
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    break;
+                }
+                _ = rx_reiniciar.recv() => { 
+                    println!("[HOT-SWAP] Reiniciando FFmpeg para cambio de pantalla...");
                     let _ = child.kill().await;
                     let _ = child.wait().await;
                 }
                 status = child.wait() => {
-                    println!("[HOT-SWAP] FFmpeg finalizó con estado: {:?}", status);
+                    println!("[HOT-SWAP] FFmpeg finalizó inesperadamente con estado: {:?}", status);
                 }
             }
             sleep(Duration::from_millis(250)).await; 
@@ -627,36 +657,56 @@ async fn inicializar_sesion_webrtc(
     let pc_clone = Arc::clone(&pc);
     let state_disconnect = Arc::clone(&state);
     
-    while let Some(Ok(msg)) = ws_rx.next().await {
-        if let Message::Text(text) = msg {
-            if let Ok(payload) = serde_json::from_str::<SignalingMessage>(text.as_str()) {
-                if let Some(sdp_data) = payload.sdp {
-                    if sdp_data.sdp_type == "answer" {
-                        let sdp_json_string = serde_json::json!({"type": "answer", "sdp": sdp_data.sdp}).to_string();
-                        if let Ok(rd) = serde_json::from_str::<RTCSessionDescription>(&sdp_json_string) {
-                            pc_clone.set_remote_description(rd).await?;
-                            log("[AGENTE] Handshake WebRTC completado. Streaming activo.", &state);
-                            {
-                                let mut lock = state.lock().unwrap();
-                                lock.estado_conexion = TipoConexion::Activa;
+    // 🔥 EL BUCLE MAESTRO: Unifica eventos del WebSocket y de fin de sesión WebRTC
+    loop {
+        tokio::select! {
+            _ = rx_end_session.recv() => {
+                log("[SISTEMA] El Visor cortó la conexión abruptamente.", &state);
+                break;
+            }
+            msg = ws_rx.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(payload) = serde_json::from_str::<SignalingMessage>(&text) {
+                            if let Some(sdp_data) = payload.sdp {
+                                if sdp_data.sdp_type == "answer" {
+                                    let sdp_json_string = serde_json::json!({"type": "answer", "sdp": sdp_data.sdp}).to_string();
+                                    if let Ok(rd) = serde_json::from_str::<RTCSessionDescription>(&sdp_json_string) {
+                                        let _ = pc_clone.set_remote_description(rd).await;
+                                        log("[AGENTE] Handshake WebRTC completado. Streaming activo.", &state);
+                                        {
+                                            let mut lock = state.lock().unwrap();
+                                            lock.estado_conexion = TipoConexion::Activa;
+                                        }
+                                    }
+                                }
+                            } else if let Some(ice_data) = payload.ice {
+                                if let Ok(ice_init) = serde_json::from_value::<webrtc::ice_transport::ice_candidate::RTCIceCandidateInit>(ice_data) {
+                                    let _ = pc_clone.add_ice_candidate(ice_init).await;
+                                }
                             }
                         }
-                    }
-                } else if let Some(ice_data) = payload.ice {
-                    if let Ok(ice_init) = serde_json::from_value::<webrtc::ice_transport::ice_candidate::RTCIceCandidateInit>(ice_data) {
-                        let _ = pc_clone.add_ice_candidate(ice_init).await;
-                    }
+                    },
+                    Some(Err(_)) | None => {
+                        log("[SISTEMA] Canal WebSocket del visor cerrado.", &state);
+                        break;
+                    },
+                    _ => {}
                 }
             }
         }
     }
     
-    log("[SISTEMA] Sesión WebRTC finalizada. El agente regresa a espera activa (Idle).", &state_disconnect);
+    // 🧽 LIMPIEZA FINAL DE LA MESA
+    log("[SISTEMA] Limpiando procesos en segundo plano y volviendo a Idle...", &state_disconnect);
+    let _ = tx_kill_workers.send(()); // Se propaga el SIGKILL a la instancia nativa de FFmpeg y destruye el puerto UDP
+    
     {
         let mut lock = state_disconnect.lock().unwrap();
         lock.estado_conexion = TipoConexion::Inactiva;
         lock.respuesta_usuario = None; 
     }
+    
     let _ = pc.close().await;
     Ok(())
 }
