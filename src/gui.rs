@@ -1,13 +1,13 @@
 // src/gui.rs
 use std::sync::{Arc, Mutex};
 use eframe::egui;
-// Importamos explícitamente los traits de Enigo
 use enigo::{Enigo, Mouse, Settings}; 
 
 #[derive(Clone, PartialEq)]
 pub enum TipoConexion {
     Inactiva,
-    SolicitudPendiente { visor_id: String },
+    // 🔥 NUEVO: Ahora el estado guarda el correo del visor
+    SolicitudPendiente { visor_id: String, visor_email: String },
     Activa,
 }
 
@@ -18,6 +18,8 @@ pub struct AppState {
     pub respuesta_usuario: Option<bool>,
     pub pantallas_disponibles: Vec<String>,
     pub usando_monitor_secundario: bool,
+    // 🔥 NUEVO: Canal para que la GUI corte la conexión asíncrona por debajo
+    pub tx_cerrar_conexion: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
 impl Default for AppState {
@@ -29,6 +31,7 @@ impl Default for AppState {
             respuesta_usuario: None,
             pantallas_disponibles: vec!["0".to_string()], 
             usando_monitor_secundario: false,
+            tx_cerrar_conexion: None,
         }
     }
 }
@@ -43,37 +46,28 @@ impl GuardianGui {
     }
 }
 
-// 🚀 LA GUILLOTINA: Evita el Crash "Abort trap 6" de macOS al cerrar
 impl Drop for GuardianGui {
     fn drop(&mut self) {
         println!("[SISTEMA] Cerrando aplicación limpiamente...");
-        
         #[cfg(not(target_os = "windows"))]
         let _ = std::process::Command::new("killall").arg("ffmpeg").output();
-        
         #[cfg(target_os = "windows")]
         let _ = std::process::Command::new("taskkill").args(&["/F", "/IM", "ffmpeg.exe"]).output();
-
         std::process::exit(0);
     }
 }
 
 impl eframe::App for GuardianGui {
-    // 🛠️ Firma alineada exactamente a lo que pide tu compilador
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         
-        // Interceptamos la "X" de la ventana para eludir el crash nativo de macOS
         if ctx.input(|i| i.viewport().close_requested()) {
             println!("[SISTEMA] Interceptando cierre nativo para evitar crash de macOS...");
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            
             #[cfg(not(target_os = "windows"))]
             let _ = std::process::Command::new("killall").arg("ffmpeg").output();
-            
             #[cfg(target_os = "windows")]
             let _ = std::process::Command::new("taskkill").args(&["/F", "/IM", "ffmpeg.exe"]).output();
-
             std::process::exit(0);
         }
         
@@ -86,32 +80,25 @@ impl eframe::App for GuardianGui {
             )
         };
 
-        // =======================================================================
-        // 🎯 CHIVATO MINIMALISTA: CHECK VERDE EN LA ESQUINA (Solo visible mientras eliges monitor)
-        // =======================================================================
         if let TipoConexion::SolicitudPendiente { .. } = estado_actual {
             if !monitor_idx.is_empty() {
                 let usando_secundario = pantallas_reales.len() > 1 && monitor_idx == pantallas_reales[1];
-                
                 let (w, _h) = if let Ok(enigo) = Enigo::new(&Settings::default()) {
                     enigo.main_display().unwrap_or((1920, 1080))
                 } else {
                     (1920, 1080)
                 };
 
-                // Esquina superior derecha de la pantalla elegida
                 let pos_x = if usando_secundario { (w * 2) as f32 - 120.0 } else { w as f32 - 120.0 };
-                
                 let vp_id = egui::ViewportId::from_hash_of("check_verde_overlay");
                 
-                // Ventana minúscula de cristal (100x100)
                 let vp_builder = egui::ViewportBuilder::default()
                     .with_title("Guardian Check")
                     .with_transparent(true)          
                     .with_decorations(false)         
                     .with_always_on_top()            
                     .with_mouse_passthrough(true)    
-                    .with_position(egui::pos2(pos_x, 40.0)) // Arriba a la derecha
+                    .with_position(egui::pos2(pos_x, 40.0))
                     .with_inner_size(egui::vec2(100.0, 100.0)); 
 
                 ctx.show_viewport_immediate(vp_id, vp_builder, |ctx_overlay, _class| {
@@ -135,12 +122,8 @@ impl eframe::App for GuardianGui {
             }
         }
 
-        // =======================================================================
-        // 💻 LA VENTANA DE CONTROL PRINCIPAL DE LA APLICACIÓN
-        // =======================================================================
         match estado_actual {
-            TipoConexion::SolicitudPendiente { visor_id } => {
-                // Le pasamos la variable `ui` correctamente como pide el compilador
+            TipoConexion::SolicitudPendiente { visor_id, visor_email } => {
                 egui::CentralPanel::default().show_inside(ui, |ui_panel| {
                     ui_panel.vertical_centered(|ui_panel| {
                         ui_panel.add_space(20.0);
@@ -150,11 +133,13 @@ impl eframe::App for GuardianGui {
                                 .color(egui::Color32::from_rgb(255, 165, 0))
                         );
                         ui_panel.add_space(10.0);
-                        ui_panel.label(format!("Un visor remoto intenta conectar.\nID: {}", visor_id));
+                        
+                        // 🔥 Imprimimos el correo y el ID del Visor
+                        ui_panel.label(format!("Se ha detectado una conexión entrante.\n\n👤 Usuario: {}\n🔑 Sesión: {}", visor_email, visor_id));
                         ui_panel.add_space(20.0);
 
                         ui_panel.group(|ui_panel| {
-                            ui_panel.label("Selecciona el monitor inicial:");
+                            ui_panel.label("Selecciona el monitor a proyectar:");
                             ui_panel.horizontal(|ui_panel| {
                                 for (i, idx_pantalla) in pantallas_reales.iter().enumerate() {
                                     let texto_boton = if i == 0 {
@@ -255,6 +240,19 @@ impl eframe::App for GuardianGui {
                                 });
                             }
                         });
+                        ui_panel.add_space(20.0);
+
+                        // 🔥 BOTÓN PARA FINALIZAR TRANSMISIÓN SIN CERRAR EL AGENTE
+                        if ui_panel.button("🛑 Finalizar Transmisión de Pantalla").clicked() {
+                            let mut state = self.state.lock().unwrap();
+                            // Tomamos el transmisor del canal y disparamos la orden al backend de Rust
+                            if let Some(tx) = state.tx_cerrar_conexion.take() {
+                                let _ = tx.try_send(());
+                            }
+                            state.estado_conexion = TipoConexion::Inactiva;
+                            state.logs.push("[SISTEMA] Sesión finalizada manualmente desde el panel de control.".to_string());
+                        }
+                        
                         ui_panel.add_space(10.0);
                     }
 

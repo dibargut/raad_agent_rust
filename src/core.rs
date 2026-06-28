@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::UdpSocket;
 use tokio::process::Command;
 use tokio::time::{sleep, Duration};
+use tokio::io::AsyncWriteExt; 
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264};
@@ -52,11 +53,13 @@ struct AuthResponse { access_token: String }
 #[derive(Deserialize, Debug)]
 struct ControlSignal { 
     action: String, 
-    session_uuid: Option<String> 
+    session_uuid: Option<String>,
+    // 🔥 NUEVO: Atrapamos el correo electrónico enviado por FastAPI
+    visor_email: Option<String> 
 }
 
 // =======================================================================
-// 🖥️ DETECCIÓN ADAPTATIVA DE PANTALLAS EN MACOS (COMPATIBLE CON DISPLAYLINK)
+// 🖥️ DETECCIÓN ADAPTATIVA DE PANTALLAS EN MACOS
 // =======================================================================
 
 #[cfg(target_os = "macos")]
@@ -84,9 +87,7 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
             let linea_lower = line.to_lowercase();
             
             if linea_lower.contains("capture screen") || linea_lower.contains("capture_screen") {
-                if palabras_camara.iter().any(|kw| linea_lower.contains(kw)) {
-                    continue;
-                }
+                if palabras_camara.iter().any(|kw| linea_lower.contains(kw)) { continue; }
 
                 if let Some(pos_dispositivo) = line.find(']') {
                     let resto_linea = &line[pos_dispositivo + 1..];
@@ -94,10 +95,7 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
                         let idx = resto_linea[start + 1..end].trim().to_string();
                         if !idx.is_empty() && idx.chars().all(|c| c.is_ascii_digit()) {
                             if !pantallas_detectadas.iter().any(|p: &PantallaReal| p.avf_index == idx) {
-                                pantallas_detectadas.push(PantallaReal {
-                                    avf_index: idx,
-                                    etiqueta: String::new(),
-                                });
+                                pantallas_detectadas.push(PantallaReal { avf_index: idx, etiqueta: String::new() });
                             }
                         }
                     }
@@ -114,24 +112,16 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
 
         let mut conteo = 1;
         if let Ok(out) = output_pantallas {
-            if let Ok(num) = String::from_utf8_lossy(&out.stdout).trim().parse::<usize>() {
-                conteo = num;
-            }
+            if let Ok(num) = String::from_utf8_lossy(&out.stdout).trim().parse::<usize>() { conteo = num; }
         }
         for i in 0..conteo {
-            pantallas_detectadas.push(PantallaReal {
-                avf_index: i.to_string(),
-                etiqueta: String::new(),
-            });
+            pantallas_detectadas.push(PantallaReal { avf_index: i.to_string(), etiqueta: String::new() });
         }
     }
 
     for (i, pantalla) in pantallas_detectadas.iter_mut().enumerate() {
-        pantalla.etiqueta = if i == 0 {
-            format!("Monitor Principal (Pantalla 1 (Laptop)) [AVF idx {}]", pantalla.avf_index)
-        } else {
-            format!("Monitor Externo (Pantalla {}) [AVF idx {}]", i + 1, pantalla.avf_index)
-        };
+        pantalla.etiqueta = if i == 0 { format!("Monitor Principal (Pantalla 1) [AVF idx {}]", pantalla.avf_index) } 
+        else { format!("Monitor Externo (Pantalla {}) [AVF idx {}]", i + 1, pantalla.avf_index) };
     }
 
     pantallas_detectadas
@@ -139,20 +129,93 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
 
 #[cfg(target_os = "macos")]
 pub async fn obtener_indices_pantalla_macos() -> Vec<String> {
-    obtener_pantallas_reales_macos()
-        .await
-        .into_iter()
-        .map(|p| p.avf_index)
-        .collect()
+    obtener_pantallas_reales_macos().await.into_iter().map(|p| p.avf_index).collect()
 }
 
 pub fn conmutar_pantalla_caliente(hacia_secundaria: bool) {
     SELECCION_MONITOR_SECUNDARIO.store(hacia_secundaria, Ordering::SeqCst);
     if let Some(tx) = &*REINICIAR_FFMPEG_TX.lock().unwrap() {
         let tx_clone = tx.clone();
-        tokio::spawn(async move {
-            let _ = tx_clone.send(()).await;
-        });
+        tokio::spawn(async move { let _ = tx_clone.send(()).await; });
+    }
+}
+
+// =======================================================================
+// 📂 DESCARGA BINARIA EN TIEMPO REAL (CONSUMO DEL ENDPOINT B)
+// =======================================================================
+async fn descargar_archivo_binario(url: String, filename: String, state: Arc<Mutex<AppState>>) {
+    let client = reqwest::Client::new();
+    let dir_path = "./guardian_downloads";
+    
+    let _ = tokio::fs::create_dir_all(dir_path).await;
+    let filepath = format!("{}/{}", dir_path, filename);
+    
+    state.lock().unwrap().logs.push(format!("[STREAM] Recibiendo y ensamblando binario: {}", filename));
+
+    match client.get(&url).send().await {
+        Ok(mut res) => {
+            if res.status().is_success() {
+                if let Ok(mut file) = tokio::fs::File::create(&filepath).await {
+                    let mut bytes_total = 0;
+                    while let Ok(Some(chunk)) = res.chunk().await {
+                        if file.write_all(&chunk).await.is_ok() { bytes_total += chunk.len(); }
+                    }
+                    state.lock().unwrap().logs.push(format!("[STREAM] ✅ Archivo '{}' guardado ({} bytes).", filename, bytes_total));
+                } else {
+                    state.lock().unwrap().logs.push(format!("[ERROR] No se pudo crear el archivo local {}", filename));
+                }
+            } else {
+                state.lock().unwrap().logs.push(format!("[ERROR] Servidor rechazó la descarga: {}", res.status()));
+            }
+        }
+        Err(e) => {
+            state.lock().unwrap().logs.push(format!("[STREAM ERROR] Conexión interrumpida en {}: {}", filename, e));
+        }
+    }
+}
+
+// =======================================================================
+// 📡 VIGILANTE SSE (SERVER-SENT EVENTS) - ENDPOINTS C y D
+// =======================================================================
+async fn iniciar_centinela_sse(session_uuid: String, backend_host: String, state: Arc<Mutex<AppState>>) {
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/api/watcher/stream-alerts/{}", backend_host, session_uuid);
+
+    loop {
+        if let Ok(mut res) = client.get(&url).send().await {
+            let mut buffer = String::new();
+            while let Ok(Some(chunk)) = res.chunk().await {
+                if let Ok(text) = std::str::from_utf8(&chunk) {
+                    buffer.push_str(text);
+                    while let Some(pos) = buffer.find('\n') {
+                        let line = buffer[..pos].to_string();
+                        buffer = buffer[pos+1..].to_string();
+                        
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                            if let Some(event) = json.get("event").and_then(|v| v.as_str()) {
+                                if event == "alert" || event == "clean" {
+                                    if let Some(payload) = json.get("payload").and_then(|v| v.as_str()) {
+                                        if payload.starts_with("INCOMING_STREAM:") {
+                                            let filename = payload.replace("INCOMING_STREAM:", "");
+                                            let dl_url = format!("http://{}/api/watcher/stream-download/{}/{}", backend_host, session_uuid, filename);
+                                            let dl_state = Arc::clone(&state);
+                                            tokio::spawn(async move {
+                                                descargar_archivo_binario(dl_url, filename, dl_state).await;
+                                            });
+                                        } else if payload == "COMMAND:CLEAN_STORAGE" {
+                                            let _ = tokio::fs::remove_dir_all("./guardian_downloads").await;
+                                            let _ = tokio::fs::create_dir_all("./guardian_downloads").await;
+                                            state.lock().unwrap().logs.push("[ALMACENAMIENTO] 🧹 Purga de directorio temporal completada.".to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        sleep(Duration::from_secs(5)).await;
     }
 }
 
@@ -165,6 +228,11 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
     let session_uuid = "test-session-123";
 
     let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
+
+    let sse_session = session_uuid.to_string();
+    let sse_host = backend_host.to_string();
+    let sse_state = Arc::clone(&state);
+    tokio::spawn(async move { iniciar_centinela_sse(sse_session, sse_host, sse_state).await; });
 
     loop {
         log("[TÚNEL] Solicitando token de acceso via HTTP...", &state);
@@ -223,18 +291,13 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                 tokio::select! {
                     _ = interval.tick() => {
                         let mut tx_lock = ctrl_tx_hb.lock().await;
-                        if tx_lock.send(Message::Text("ping".into())).await.is_err() {
-                            break; 
-                        }
+                        if tx_lock.send(Message::Text("ping".into())).await.is_err() { break; }
                     }
-                    _ = &mut hb_abort_rx => {
-                        break; 
-                    }
+                    _ = &mut hb_abort_rx => { break; }
                 }
             }
         });
 
-        // Tolerancia a fallos: leemos como String tanto tramas de Texto como Binarias
         while let Some(Ok(msg)) = ctrl_rx.next().await {
             let texto_recibido = match msg {
                 Message::Text(t) => t.to_string(),
@@ -254,17 +317,18 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                         let token_session = token.clone();
                         let backend_host_str = backend_host.to_string();
                         let session_id_str = signal.session_uuid.unwrap_or_else(|| session_uuid.to_string());
+                        
+                        // 🔥 Extraemos el correo del payload
+                        let email_str = signal.visor_email.unwrap_or_else(|| "desconocido@guardian.com".to_string());
 
                         tokio::spawn(async move {
-                            if let Err(e) = inicializar_sesion_webrtc(id_pantalla_clone, state_session, token_session, backend_host_str, session_id_str).await {
+                            if let Err(e) = inicializar_sesion_webrtc(id_pantalla_clone, state_session, token_session, backend_host_str, session_id_str, email_str).await {
                                 println!("[ERROR SESIÓN] Fallo crítico en sesión WebRTC: {:?}", e);
                             }
                         });
                     }
                 }
-                Err(e) => {
-                    println!("🚨 [JSON ERROR] Error de parseo: {:?}", e);
-                }
+                Err(e) => { println!("🚨 [JSON ERROR] Error de parseo: {:?}", e); }
             }
         }
 
@@ -275,14 +339,15 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
 }
 
 // =======================================================================
-// 📡 FLUJO DE NEGOCIACIÓN WEBRTC INDEPENDIENTE (HANDSHAKE TRAS DESPERTAR)
+// 📡 FLUJO DE NEGOCIACIÓN WEBRTC INDEPENDIENTE (HANDSHAKE)
 // =======================================================================
 async fn inicializar_sesion_webrtc(
     id_pantalla: String, 
     state: Arc<Mutex<AppState>>, 
     token: String,
     backend_host: String,
-    session_uuid: String
+    session_uuid: String,
+    visor_email: String // 🔥 Lo recibimos por parámetro
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
 
@@ -296,6 +361,9 @@ async fn inicializar_sesion_webrtc(
     #[cfg(not(target_os = "macos"))]
     let opciones_dropdown: Vec<String> = pantallas_reales.clone();
 
+    // 🔥 Creamos el canal de comunicación para el botón "Terminar Transmisión" de la GUI
+    let (tx_corte_gui, mut rx_corte_gui) = tokio::sync::mpsc::channel::<()>(1);
+
     log("[SISTEMA] Levantando pop-up de confirmación en la UI local...", &state);
     {
         let mut lock = state.lock().unwrap();
@@ -303,12 +371,19 @@ async fn inicializar_sesion_webrtc(
         if !opciones_dropdown.is_empty() {
             lock.pantalla_seleccionada_inicial = Some(opciones_dropdown[0].clone());
         }
-        lock.estado_conexion = TipoConexion::SolicitudPendiente { visor_id: session_uuid.to_string() };
+        lock.estado_conexion = TipoConexion::SolicitudPendiente { 
+            visor_id: session_uuid.to_string(), 
+            visor_email: visor_email.clone() // 🔥 Lo pasamos a la GUI para dibujarlo
+        };
+        lock.tx_cerrar_conexion = Some(tx_corte_gui); // Cargamos el arma
     }
 
     let mut index_avf_final = id_pantalla;
     
     loop {
+        // 🔥 Si el usuario le da a cortar la transmisión *MIENTRAS* está la solicitud pendiente, salimos
+        if let Ok(_) = rx_corte_gui.try_recv() { return Ok(()); }
+
         let (respondido, aprobado, etiqueta_seleccionada) = {
             let lock = state.lock().unwrap();
             (lock.respuesta_usuario.is_some(), lock.respuesta_usuario.unwrap_or(false), lock.pantalla_seleccionada_inicial.clone())
@@ -341,9 +416,7 @@ async fn inicializar_sesion_webrtc(
     #[cfg(target_os = "macos")]
     let arranque_secundaria = if !pantallas_reales.is_empty() {
         index_avf_final != pantallas_reales[0].avf_index
-    } else {
-        false
-    };
+    } else { false };
     
     #[cfg(not(target_os = "macos"))]
     let arranque_secundaria = index_avf_final != "0";
@@ -397,30 +470,22 @@ async fn inicializar_sesion_webrtc(
         Box::pin(async {})
     }));
 
-    // 🔥 1. CANAL DE CIERRE GLOBAL: Emite un broadcast para liquidar hilos al instante
     let (tx_kill_workers, _) = tokio::sync::broadcast::channel::<()>(1);
     
     let mut rx_kill_mouse = tx_kill_workers.subscribe();
     std::thread::spawn(move || {
-        let mut enigo = match Enigo::new(&Settings::default()) {
-            Ok(e) => e,
-            Err(_) => return,
-        };
+        let mut enigo = match Enigo::new(&Settings::default()) { Ok(e) => e, Err(_) => return };
         let (mut w, mut h) = enigo.main_display().unwrap_or((1920, 1080));
         let mut ultima_seleccion_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
 
         while let Some(cmd) = rx_control.blocking_recv() {
-            // Abortamos de inmediato si la sesión se corta
             if rx_kill_mouse.try_recv().is_ok() { break; } 
 
             let modo_actual_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
             if modo_actual_secundaria != ultima_seleccion_secundaria {
                 if let Ok(nueva_enigo) = Enigo::new(&Settings::default()) {
                     enigo = nueva_enigo;
-                    if let Ok(dim) = enigo.main_display() {
-                        w = dim.0;
-                        h = dim.1;
-                    }
+                    if let Ok(dim) = enigo.main_display() { w = dim.0; h = dim.1; }
                 }
                 ultima_seleccion_secundaria = modo_actual_secundaria;
             }
@@ -472,14 +537,11 @@ async fn inicializar_sesion_webrtc(
     });
 
     let state_wrtc = Arc::clone(&state);
-    
-    // 🔥 2. DETECTOR DE MUERTE: Observamos el PeerConnection para saber si el visor cerró el navegador
     let (tx_end_session, mut rx_end_session) = tokio::sync::mpsc::channel::<()>(1);
     let tx_end_clone = tx_end_session.clone();
     
     pc.on_peer_connection_state_change(Box::new(move |estado_webrtc| {
         state_wrtc.lock().unwrap().logs.push(format!("[WEBRTC] Estado: {}", estado_webrtc));
-        
         if estado_webrtc == RTCPeerConnectionState::Failed || estado_webrtc == RTCPeerConnectionState::Disconnected || estado_webrtc == RTCPeerConnectionState::Closed {
             let _ = tx_end_clone.try_send(());
         }
@@ -514,7 +576,6 @@ async fn inicializar_sesion_webrtc(
     let (tx_reiniciar, mut rx_reiniciar) = tokio::sync::mpsc::channel::<()>(10);
     *REINICIAR_FFMPEG_TX.lock().unwrap() = Some(tx_reiniciar);
 
-    // ⚡ EL REESCRITOR RTP MATEMÁTICO INTEGRADO (Cierra el puerto 5004 cuando la sesión termina)
     let track_udp_worker = Arc::clone(&track_clone);
     let mut rx_kill_udp = tx_kill_workers.subscribe();
     
@@ -531,7 +592,7 @@ async fn inicializar_sesion_webrtc(
 
             loop {
                 tokio::select! {
-                    _ = rx_kill_udp.recv() => { break; } // Sale del bucle, destruyendo el Socket y liberando el puerto
+                    _ = rx_kill_udp.recv() => { break; } 
                     res = listener.recv_from(&mut inbound_buffer) => {
                         if let Ok((n, _)) = res {
                             if n >= 12 { 
@@ -585,13 +646,9 @@ async fn inicializar_sesion_webrtc(
             } else {
                 let pantallas = obtener_pantallas_reales_macos().await;
                 let usar_secundaria = SELECCION_MONITOR_SECUNDARIO.load(Ordering::SeqCst);
-                if usar_secundaria && pantallas.len() > 1 {
-                    pantallas[1].avf_index.clone()
-                } else if !pantallas.is_empty() {
-                    pantallas[0].avf_index.clone()
-                } else {
-                    "0".to_string()
-                }
+                if usar_secundaria && pantallas.len() > 1 { pantallas[1].avf_index.clone() } 
+                else if !pantallas.is_empty() { pantallas[0].avf_index.clone() } 
+                else { "0".to_string() }
             };
 
             #[cfg(not(target_os = "macos"))]
@@ -599,8 +656,6 @@ async fn inicializar_sesion_webrtc(
 
             primer_arranque = false;
 
-            // 🔥 3. PARCHE ANTIZOMBIS: Ejecutamos FFMPEG directo. Nunca usamos `sh -c` para que `child.kill()`
-            // aniquile el proceso de captura real y no se quede huérfano en macOS.
             #[cfg(target_os = "macos")]
             let input_arg = format!("{}:none", avf_index);
             
@@ -635,7 +690,6 @@ async fn inicializar_sesion_webrtc(
 
             tokio::select! {
                 _ = rx_kill_ffmpeg.recv() => { 
-                    // ☠️ Al cerrar la sesión, mandamos SIGKILL a ffmpeg directo y esperamos su muerte
                     println!("[SISTEMA] Cerrando proceso FFmpeg de forma segura...");
                     let _ = child.kill().await;
                     let _ = child.wait().await;
@@ -646,9 +700,7 @@ async fn inicializar_sesion_webrtc(
                     let _ = child.kill().await;
                     let _ = child.wait().await;
                 }
-                status = child.wait() => {
-                    println!("[HOT-SWAP] FFmpeg finalizó inesperadamente con estado: {:?}", status);
-                }
+                status = child.wait() => { println!("[HOT-SWAP] FFmpeg finalizó inesperadamente con estado: {:?}", status); }
             }
             sleep(Duration::from_millis(250)).await; 
         }
@@ -657,9 +709,13 @@ async fn inicializar_sesion_webrtc(
     let pc_clone = Arc::clone(&pc);
     let state_disconnect = Arc::clone(&state);
     
-    // 🔥 EL BUCLE MAESTRO: Unifica eventos del WebSocket y de fin de sesión WebRTC
     loop {
         tokio::select! {
+            // 🔥 AQUÍ ES DONDE EL BOTÓN ROJO DE LA GUI MATA LA TRANSMISIÓN SIN CERRAR EL AGENTE
+            _ = rx_corte_gui.recv() => {
+                log("[SISTEMA] Apagado forzado desde el Agente.", &state);
+                break;
+            }
             _ = rx_end_session.recv() => {
                 log("[SISTEMA] El Visor cortó la conexión abruptamente.", &state);
                 break;
@@ -697,9 +753,8 @@ async fn inicializar_sesion_webrtc(
         }
     }
     
-    // 🧽 LIMPIEZA FINAL DE LA MESA
     log("[SISTEMA] Limpiando procesos en segundo plano y volviendo a Idle...", &state_disconnect);
-    let _ = tx_kill_workers.send(()); // Se propaga el SIGKILL a la instancia nativa de FFmpeg y destruye el puerto UDP
+    let _ = tx_kill_workers.send(()); 
     
     {
         let mut lock = state_disconnect.lock().unwrap();
