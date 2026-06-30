@@ -2321,6 +2321,7 @@ dependencies = [
 name = "guardian-agent"
 version = "0.1.0"
 dependencies = [
+ "arboard",
  "axum",
  "bytes",
  "chrono",

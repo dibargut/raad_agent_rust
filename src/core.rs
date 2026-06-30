@@ -19,7 +19,7 @@ use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
-use crate::gui::{AppState, TipoConexion};
+use crate::gui::{AppState, TipoConexion, ModoApp};
 use crate::input::mapear_tecla;
 
 static SELECCION_MONITOR_SECUNDARIO: AtomicBool = AtomicBool::new(false);
@@ -34,6 +34,7 @@ struct CommandPayload {
     #[serde(default)] h_nativa: f64,
     #[serde(default)] button: String,
     #[serde(default)] key: String,
+    #[serde(default)] text: String, // 🔥 NUEVO: Campo para recibir el texto del portapapeles
     #[serde(default)] delta_x: i32,
     #[serde(default)] delta_y: i32,
 }
@@ -47,14 +48,10 @@ struct SignalingMessage {
     #[serde(skip_serializing_if = "Option::is_none")] ice: Option<serde_json::Value>,
 }
 
-#[derive(Deserialize)]
-struct AuthResponse { access_token: String }
-
 #[derive(Deserialize, Debug)]
 struct ControlSignal { 
     action: String, 
     session_uuid: Option<String>,
-    // 🔥 NUEVO: Atrapamos el correo electrónico enviado por FastAPI
     visor_email: Option<String> 
 }
 
@@ -105,25 +102,18 @@ pub async fn obtener_pantallas_reales_macos() -> Vec<PantallaReal> {
     }
 
     if pantallas_detectadas.is_empty() {
-        let output_pantallas = Command::new("osascript")
-            .args(&["-e", "tell application \"Finder\" to get count of screens"])
-            .output()
-            .await;
-
+        let output_pantallas = Command::new("osascript").args(&["-e", "tell application \"Finder\" to get count of screens"]).output().await;
         let mut conteo = 1;
         if let Ok(out) = output_pantallas {
             if let Ok(num) = String::from_utf8_lossy(&out.stdout).trim().parse::<usize>() { conteo = num; }
         }
-        for i in 0..conteo {
-            pantallas_detectadas.push(PantallaReal { avf_index: i.to_string(), etiqueta: String::new() });
-        }
+        for i in 0..conteo { pantallas_detectadas.push(PantallaReal { avf_index: i.to_string(), etiqueta: String::new() }); }
     }
 
     for (i, pantalla) in pantallas_detectadas.iter_mut().enumerate() {
         pantalla.etiqueta = if i == 0 { format!("Monitor Principal (Pantalla 1) [AVF idx {}]", pantalla.avf_index) } 
         else { format!("Monitor Externo (Pantalla {}) [AVF idx {}]", i + 1, pantalla.avf_index) };
     }
-
     pantallas_detectadas
 }
 
@@ -223,51 +213,46 @@ async fn iniciar_centinela_sse(session_uuid: String, backend_host: String, state
 // 🔌 FUNCIÓN PRINCIPAL: TÚNEL DE CONTROL PERSISTENTE (IDLE)
 // =======================================================================
 pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let backend_host = "192.168.1.135:8080";
-    let password = "TuContrasenaSeguraAqui";
-    let session_uuid = "test-session-123";
-
     let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
 
-    let sse_session = session_uuid.to_string();
-    let sse_host = backend_host.to_string();
+    // 🔥 1. ESPERAMOS A QUE EL OPERADOR HAGA LOGIN EN LA UI
+    // Rust nos permite retornar los valores directamente desde el bucle para evitar declarar variables vacías.
+    let (backend_host, session_uuid, token) = loop {
+        {
+            let lock = state.lock().unwrap();
+            // Si la UI pasó al Panel de Control y tenemos un Token, sacamos los datos
+            if lock.modo == ModoApp::PanelControl {
+                if let Some(t) = &lock.token_jwt {
+                    break (
+                        lock.host_input.clone(),
+                        lock.serial_input.clone(),
+                        t.clone()
+                    );
+                }
+            }
+        }
+        // Dormimos el bucle asíncrono para no saturar la CPU mientras el usuario escribe
+        sleep(Duration::from_millis(500)).await;
+    };
+
+    log(&format!("[TÚNEL] Iniciando núcleo para el dispositivo: {}", session_uuid), &state);
+
+    // 🔥 2. INYECTAMOS EL VIGILANTE SSE CON LOS DATOS REALES (Sin Hardcodings)
+    let sse_session = session_uuid.clone();
+    let sse_host = backend_host.clone();
     let sse_state = Arc::clone(&state);
     tokio::spawn(async move { iniciar_centinela_sse(sse_session, sse_host, sse_state).await; });
 
+    // 🔥 3. BUCLE PRINCIPAL DE CONEXIÓN WEBSOCKET 
     loop {
-        log("[TÚNEL] Solicitando token de acceso via HTTP...", &state);
-        let client = reqwest::Client::new();
-        let auth_res_result = client
-            .post(format!("http://{}/api/remote/auth/login", backend_host))
-            .json(&serde_json::json!({ "password": password }))
-            .send().await;
-
-        let auth_res = match auth_res_result {
-            Ok(res) => res,
-            Err(_) => {
-                log("[SISTEMA] El backend central no responde. Reintentando en 5s...", &state);
-                sleep(Duration::from_secs(5)).await;
-                continue;
-            }
-        };
-
-        if !auth_res.status().is_success() { 
-            log("[ERROR] Autenticación rechazada. Reintentando en 5s...", &state);
-            sleep(Duration::from_secs(5)).await;
-            continue; 
-        }
-
-        let auth_data: AuthResponse = auth_res.json().await?;
-        let token = auth_data.access_token;
-
         let ctrl_ws_url = format!("ws://{}/api/remote/agent/connect/{}?token={}", backend_host, session_uuid, token);
         log("[TÚNEL] Abriendo canal permanente de control (Idle Mode)...", &state);
 
-        let (ws_stream, _) = match connect_async(ctrl_ws_url).await {
+        let (ws_stream, _) = match connect_async(&ctrl_ws_url).await {
             Ok(ws) => ws,
             Err(e) => {
-                log(&format!("[TÚNEL] Error al acoplar socket: {}. Reintentando...", e), &state);
-                sleep(Duration::from_secs(3)).await;
+                log(&format!("[TÚNEL] Error al acoplar socket: {}. Reintentando en 5s...", e), &state);
+                sleep(Duration::from_secs(5)).await;
                 continue;
             }
         };
@@ -315,10 +300,8 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                         let id_pantalla_clone = id_pantalla.clone();
                         let state_session = Arc::clone(&state);
                         let token_session = token.clone();
-                        let backend_host_str = backend_host.to_string();
-                        let session_id_str = signal.session_uuid.unwrap_or_else(|| session_uuid.to_string());
-                        
-                        // 🔥 Extraemos el correo del payload
+                        let backend_host_str = backend_host.clone();
+                        let session_id_str = signal.session_uuid.unwrap_or_else(|| session_uuid.clone());
                         let email_str = signal.visor_email.unwrap_or_else(|| "desconocido@guardian.com".to_string());
 
                         tokio::spawn(async move {
@@ -326,6 +309,32 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
                                 println!("[ERROR SESIÓN] Fallo crítico en sesión WebRTC: {:?}", e);
                             }
                         });
+                    } 
+                    else if signal.action == "mfa_authorized" {
+                        log("[MFA] Autorización remota recibida. Aceptando conexión automáticamente...", &state);
+                        let mut lock = state.lock().unwrap();
+                        
+                        if let TipoConexion::SolicitudPendiente { .. } = lock.estado_conexion {
+                            if lock.pantalla_seleccionada_inicial.is_none() {
+                                lock.pantalla_seleccionada_inicial = lock.pantallas_disponibles.first().cloned();
+                            }
+                            if lock.pantallas_disponibles.len() > 1 {
+                                let seleccion = lock.pantalla_seleccionada_inicial.as_ref().unwrap();
+                                lock.usando_monitor_secundario = seleccion == &lock.pantallas_disponibles[1];
+                            } else {
+                                lock.usando_monitor_secundario = false;
+                            }
+                            lock.respuesta_usuario = Some(true);
+                            lock.estado_conexion = TipoConexion::Activa;
+                        }
+                    }
+                    else if signal.action == "end_session" {
+                        log("[SISTEMA] 🛑 Orden de apagado remoto recibida. Cortando transmisión...", &state);
+                        let mut lock = state.lock().unwrap();
+                        if let Some(tx) = lock.tx_cerrar_conexion.take() {
+                            let _ = tx.try_send(());
+                        }
+                        lock.estado_conexion = TipoConexion::Inactiva;
                     }
                 }
                 Err(e) => { println!("🚨 [JSON ERROR] Error de parseo: {:?}", e); }
@@ -339,7 +348,7 @@ pub async fn ejecutar_core_agente(id_pantalla: String, state: Arc<Mutex<AppState
 }
 
 // =======================================================================
-// 📡 FLUJO DE NEGOCIACIÓN WEBRTC INDEPENDIENTE (HANDSHAKE)
+// 📡 FLUJO DE NEGOCIACIÓN WEBRTC INDEPENDIENTE (HANDSHAKE TRAS DESPERTAR)
 // =======================================================================
 async fn inicializar_sesion_webrtc(
     id_pantalla: String, 
@@ -347,7 +356,7 @@ async fn inicializar_sesion_webrtc(
     token: String,
     backend_host: String,
     session_uuid: String,
-    visor_email: String // 🔥 Lo recibimos por parámetro
+    visor_email: String
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let log = |msg: &str, s: &Arc<Mutex<AppState>>| { s.lock().unwrap().logs.push(msg.to_string()); };
 
@@ -361,7 +370,6 @@ async fn inicializar_sesion_webrtc(
     #[cfg(not(target_os = "macos"))]
     let opciones_dropdown: Vec<String> = pantallas_reales.clone();
 
-    // 🔥 Creamos el canal de comunicación para el botón "Terminar Transmisión" de la GUI
     let (tx_corte_gui, mut rx_corte_gui) = tokio::sync::mpsc::channel::<()>(1);
 
     log("[SISTEMA] Levantando pop-up de confirmación en la UI local...", &state);
@@ -373,15 +381,14 @@ async fn inicializar_sesion_webrtc(
         }
         lock.estado_conexion = TipoConexion::SolicitudPendiente { 
             visor_id: session_uuid.to_string(), 
-            visor_email: visor_email.clone() // 🔥 Lo pasamos a la GUI para dibujarlo
+            visor_email: visor_email.clone() 
         };
-        lock.tx_cerrar_conexion = Some(tx_corte_gui); // Cargamos el arma
+        lock.tx_cerrar_conexion = Some(tx_corte_gui);
     }
 
     let mut index_avf_final = id_pantalla;
     
     loop {
-        // 🔥 Si el usuario le da a cortar la transmisión *MIENTRAS* está la solicitud pendiente, salimos
         if let Ok(_) = rx_corte_gui.try_recv() { return Ok(()); }
 
         let (respondido, aprobado, etiqueta_seleccionada) = {
@@ -528,6 +535,52 @@ async fn inicializar_sesion_webrtc(
                         match k {
                             enigo::Key::Unicode(_) => {}
                             tecla_especial => { let _ = enigo.key(tecla_especial, Direction::Release); }
+                        }
+                    }
+                }
+                // 🔥 NUEVO: INYECCIÓN INTELIGENTE DE PORTAPAPELES (Agnóstico al SO)
+                "clipboard_inject" => {
+                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                        if clipboard.set_text(cmd.text.clone()).is_ok() {
+                            println!("[PORTAPAPELES] Texto copiado desde el visor remoto con éxito.");
+                            
+                            // 1. 🔥 Pausa obligatoria: Le da tiempo al SO (especialmente a Mac) a asimilar la nueva memoria
+                            std::thread::sleep(std::time::Duration::from_millis(150));
+                            
+                            // 2. Limpieza de seguridad: Soltamos teclas que pudieran haber quedado "pegadas"
+                            let _ = enigo.key(enigo::Key::Control, Direction::Release);
+                            let _ = enigo.key(enigo::Key::Meta, Direction::Release);
+                            let _ = enigo.key(enigo::Key::Shift, Direction::Release);
+
+                            // 3. El compilador de Rust elige el bloque correcto según el PC donde corra el Agente
+                            #[cfg(target_os = "macos")]
+                            {
+                                // Lógica exclusiva para MAC (Command + V físico)
+                                let _ = enigo.key(enigo::Key::Meta, Direction::Press);
+                                let _ = enigo.key(enigo::Key::Unicode('v'), Direction::Press);
+                                std::thread::sleep(std::time::Duration::from_millis(50));
+                                let _ = enigo.key(enigo::Key::Unicode('v'), Direction::Release);
+                                let _ = enigo.key(enigo::Key::Meta, Direction::Release);
+                            }
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                // Lógica exclusiva para Windows y Linux (Ctrl + V físico)
+                                let _ = enigo.key(enigo::Key::Control, Direction::Press);
+                                let _ = enigo.key(enigo::Key::Unicode('v'), Direction::Press);
+                                std::thread::sleep(std::time::Duration::from_millis(50));
+                                let _ = enigo.key(enigo::Key::Unicode('v'), Direction::Release);
+                                let _ = enigo.key(enigo::Key::Control, Direction::Release);
+                            }
+                        }
+                    }
+                }
+                // 🔥 NUEVO: SINCRONIZACIÓN SILENCIOSA PARA EL CLICK DERECHO
+                // 🔥 ROLLBACK & CLEAN: Solo actualizamos la memoria silenciosamente
+                "clipboard_sync" => {
+                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                        if clipboard.set_text(cmd.text.clone()).is_ok() {
+                            println!("[PORTAPAPELES] Texto recibido del modal y guardado en la memoria de la Mac.");
+                            // No simulamos teclado. El usuario usará Click Derecho -> Pegar, o Cmd+V desde el visor.
                         }
                     }
                 }
@@ -711,7 +764,6 @@ async fn inicializar_sesion_webrtc(
     
     loop {
         tokio::select! {
-            // 🔥 AQUÍ ES DONDE EL BOTÓN ROJO DE LA GUI MATA LA TRANSMISIÓN SIN CERRAR EL AGENTE
             _ = rx_corte_gui.recv() => {
                 log("[SISTEMA] Apagado forzado desde el Agente.", &state);
                 break;
